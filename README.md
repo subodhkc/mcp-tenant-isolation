@@ -179,6 +179,21 @@ jobs:
 | 1 | Findings found |
 | 2 | Error (config invalid, parse failure, etc.) |
 
+### GitHub Code Scanning Integration
+
+When you upload SARIF output using `github/codeql-action/upload-sarif@v3`, findings appear in your repository's **Security > Code scanning alerts** tab. This works with both free and Advanced Security-enabled repos.
+
+What happens:
+1. `mti scan --format sarif --output results.sarif` generates a SARIF 2.1.0 file
+2. `upload-sarif` action sends it to GitHub's code scanning API
+3. Each finding becomes a code scanning alert with file, line, severity, and remediation hint
+4. Alerts can be dismissed, fixed, or tracked directly in the GitHub UI
+5. Pull request annotations appear automatically on changed files
+
+Requirements:
+- `permissions: security-events: write` in your workflow
+- The SARIF file must be generated before the upload step
+
 ## Configuration
 
 Create `.mtirc.json` in your project root:
