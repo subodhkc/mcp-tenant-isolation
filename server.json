@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.subodhkc/mcp-tenant-isolation",
-  "description": "Static analysis scanner for MCP server code and multi-tenant SaaS applications. 57 deterministic rules covering tenant isolation, tool visibility, cache key scoping, RLS, IDOR, and credential vault isolation.",
+  "description": "Static analysis scanner for MCP server code and multi-tenant SaaS applications.",
   "repository": {
     "url": "https://github.com/subodhkc/mcp-tenant-isolation",
     "source": "github"
