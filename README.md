@@ -132,9 +132,11 @@ jobs:
       - uses: subodhkc/mcp-tenant-isolation@v1
         with:
           path: ./src
+          severity: HIGH
+          fail-on: HIGH
 ```
 
-This runs the scan, uploads SARIF to GitHub Code Scanning, and generates a Markdown report artifact automatically.
+Runs the scan, uploads SARIF to GitHub Code Scanning, generates a Markdown report artifact, and fails the workflow if HIGH or CRITICAL findings are detected.
 
 ### Option 2: Manual npx
 

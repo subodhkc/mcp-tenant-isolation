@@ -1,0 +1,10 @@
+node_modules
+dist
+haiec-scan-results*.json
+.env
+.mtirc.local.json
+coverage
+.git
+*.md
+!README.md
+tests

@@ -1,40 +1,67 @@
-name: Tenant Isolation Scan
+name: 'Tenant Isolation Scan'
+description: 'Static analysis for multi-tenant SaaS and MCP server code. 57 rules for cross-tenant data leakage, IDOR, and RLS.'
+author: 'Subodh Kc'
+branding:
+  icon: 'shield'
+  color: 'purple'
 
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+inputs:
+  path:
+    description: 'Path to scan (default: ./src)'
+    required: false
+    default: './src'
+  severity:
+    description: 'Minimum severity to report: CRITICAL, HIGH, MEDIUM, LOW, INFO'
+    required: false
+    default: ''
+  fail-on:
+    description: 'Fail the workflow if findings at this severity or higher: CRITICAL, HIGH, MEDIUM, LOW'
+    required: false
+    default: 'HIGH'
 
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+    - name: Run tenant isolation scan
+      id: scan
+      shell: bash
+      run: |
+        ARGS="--format sarif --output results.sarif"
+        if [ -n "${{ inputs.severity }}" ]; then
+          ARGS="$ARGS --severity ${{ inputs.severity }}"
+        fi
+        npx mcp-tenant-isolation scan ${{ inputs.path }} $ARGS
+        echo "scan-exit=$?" >> $GITHUB_OUTPUT
 
-      - name: Run tenant isolation scan
-        run: npx mcp-tenant-isolation scan ./src --format sarif --output results.sarif
+    - name: Generate Markdown report
+      if: always()
+      shell: bash
+      run: npx mcp-tenant-isolation scan ${{ inputs.path }} --format markdown --output TENANT-ISOLATION-REPORT.md
 
-      - name: Generate Markdown report
-        run: npx mcp-tenant-isolation scan ./src --format markdown --output TENANT-ISOLATION-REPORT.md
-        if: always()
+    - name: Upload SARIF to GitHub Code Scanning
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: results.sarif
 
-      - name: Upload SARIF to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
-        if: always()
+    - name: Upload Markdown report artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: tenant-isolation-report
+        path: TENANT-ISOLATION-REPORT.md
 
-      - name: Upload Markdown report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tenant-isolation-report
-          path: TENANT-ISOLATION-REPORT.md
-        if: always()
+    - name: Check fail threshold
+      if: steps.scan.outputs.scan-exit == '1'
+      shell: bash
+      run: |
+        SEVERITY="${{ inputs.fail-on }}"
+        if [ "$SEVERITY" = "CRITICAL" ] || [ "$SEVERITY" = "HIGH" ]; then
+          echo "::error::Tenant isolation findings detected at $SEVERITY or above. Check SARIF results."
+          exit 1
+        fi

@@ -68,7 +68,8 @@
     "CONTRIBUTING.md",
     "SECURITY.md",
     "schemas",
-    "action.yml"
+    "action.yml",
+    "Dockerfile"
   ],
   "dependencies": {
     "@babel/parser": "^7.24.0",
