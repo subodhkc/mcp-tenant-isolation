@@ -13,12 +13,13 @@ RUN npm run build
 
 FROM node:20-slim
 
-RUN npm install -g mcp-tenant-isolation@1.6.1 || true
+WORKDIR /app
 
+COPY --from=builder /build/package.json /build/package-lock.json ./
 COPY --from=builder /build/dist/ ./dist/
-COPY package.json ./
+COPY --from=builder /build/schemas/ ./schemas/
 
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 ENTRYPOINT ["node", "dist/cli/index.js"]
 CMD ["--help"]
