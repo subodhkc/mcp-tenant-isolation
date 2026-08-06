@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "mcp-tenant-isolation configuration",
+  "type": "object",
+  "properties": {
+    "rules": {
+      "type": "object",
+      "properties": {
+        "severity": {
+          "type": "object",
+          "description": "Override default severity for specific rules",
+          "patternProperties": {
+            "^[A-Z]+-\\d+$": {
+              "type": "string",
+              "enum": ["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+            }
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Rule IDs to exclude from scan"
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "properties": {
+        "include": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns to include in scan"
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns to exclude from scan"
+        },
+        "nonProduction": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Path patterns for non-production files (scripts, diagnostics). Findings in these paths are downgraded to INFO severity."
+        }
+      }
+    },
+    "suppressions": {
+      "type": "string",
+      "description": "Path to suppressions file",
+      "default": ".mti-suppressions.json"
+    },
+    "baseline": {
+      "type": "string",
+      "description": "Path to baseline file",
+      "default": ".mti-baseline.json"
+    },
+    "rulePacks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Paths to custom rule pack JSON files"
+    },
+    "authHelpers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Additional auth helper function names to detect (e.g., requireOrganizationAccess, getServerSession)"
+    },
+    "tenantGuards": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Additional tenant guard patterns to detect (e.g., validateTenantContext, checkOrganizationAccess)"
+    },
+    "modelScopes": {
+      "type": "object",
+      "description": "Override Prisma model scope classification",
+      "properties": {
+        "userScoped": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Models that are user-scoped (filtered by userId, not organizationId)"
+        },
+        "global": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Models that are global (no tenant filtering needed)"
+        },
+        "tenantScoped": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Models that are tenant-scoped (must have organizationId or tenantId)"
+        }
+      }
+    },
+    "framework": {
+      "type": "string",
+      "enum": ["nextjs-app-router", "nextjs-pages", "express", "fastify", "auto"],
+      "description": "Framework hint for source detection patterns",
+      "default": "auto"
+    },
+    "output": {
+      "type": "string",
+      "enum": ["terminal", "json", "sarif", "ai", "markdown"],
+      "description": "Default output format when --format is not specified"
+    }
+  }
+}

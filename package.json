@@ -1,0 +1,90 @@
+{
+  "name": "mcp-tenant-isolation",
+  "version": "1.6.1",
+  "description": "Static analysis scanner for MCP server code and multi-tenant SaaS applications. 57 deterministic rules covering tenant isolation, tool visibility, cache key scoping, RLS, IDOR, and credential vault isolation. MCP server for AI agent integration.",
+  "main": "dist/index.js",
+  "bin": {
+    "mti": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "mcp",
+    "tenant-isolation",
+    "multi-tenant",
+    "security",
+    "static-analysis",
+    "sast",
+    "owasp",
+    "model-context-protocol",
+    "saas",
+    "saas-security",
+    "rls",
+    "row-level-security",
+    "idor",
+    "cross-tenant",
+    "data-leakage",
+    "data-isolation",
+    "audit",
+    "scanner",
+    "linter",
+    "ai-agent",
+    "sarif",
+    "code-scanning",
+    "prisma",
+    "typescript",
+    "nextjs",
+    "claude",
+    "cursor",
+    "application-security",
+    "tenant",
+    "isolation"
+  ],
+  "author": "Subodh Kc <subodhkc.com>",
+  "license": "MIT",
+  "homepage": "https://www.haiec.com/mcp-tenant-isolation",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/subodhkc/mcp-tenant-isolation"
+  },
+  "bugs": {
+    "url": "https://github.com/subodhkc/mcp-tenant-isolation/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "schemas",
+    "action.yml"
+  ],
+  "dependencies": {
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "@babel/types": "^7.24.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "commander": "^12.0.0",
+    "fast-glob": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.20.5",
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.7.0",
+    "@typescript-eslint/parser": "^7.7.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

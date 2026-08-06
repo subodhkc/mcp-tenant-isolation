@@ -1,0 +1,28 @@
+// Test fixture: Missing tenant field in Prisma schema
+// Should trigger SCH-001
+
+model Post {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  published   Boolean  @default(false)
+  authorId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author      User     @relation(fields: [authorId], references: [id])
+
+  @@index([authorId])
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  organizationId String
+  createdAt     DateTime @default(now())
+
+  posts         Post[]
+
+  @@index([organizationId])
+}

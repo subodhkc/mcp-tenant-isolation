@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts
+!vitest.config.ts
+.env
+.mtirc.local.json
+coverage/
+.DS_Store
+haiec-scan-results*.json
+check-auth.js
+compare.js
+report-data.js

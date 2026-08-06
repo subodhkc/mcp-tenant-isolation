@@ -1,0 +1,40 @@
+name: Tenant Isolation Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run tenant isolation scan
+        run: npx mcp-tenant-isolation scan ./src --format sarif --output results.sarif
+
+      - name: Generate Markdown report
+        run: npx mcp-tenant-isolation scan ./src --format markdown --output TENANT-ISOLATION-REPORT.md
+        if: always()
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+        if: always()
+
+      - name: Upload Markdown report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-isolation-report
+          path: TENANT-ISOLATION-REPORT.md
+        if: always()
