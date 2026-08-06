@@ -9,7 +9,6 @@ Static analysis scanner for multi-tenant SaaS and MCP server code. Catches cross
 [![CI](https://github.com/subodhkc/mcp-tenant-isolation/actions/workflows/ci.yml/badge.svg)](https://github.com/subodhkc/mcp-tenant-isolation/actions/workflows/ci.yml)
 [![Docker](https://img.shields.io/docker/v/subodhkc/mcp-tenant-isolation?label=docker)](https://hub.docker.com/r/subodhkc/mcp-tenant-isolation)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub stars](https://img.shields.io/github/stars/subodhkc/mcp-tenant-isolation?style=social)](https://github.com/subodhkc/mcp-tenant-isolation)
 
 ## Who is this for
 
