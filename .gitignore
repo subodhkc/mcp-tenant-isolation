@@ -4,6 +4,7 @@ dist/
 *.d.ts
 !vitest.config.ts
 .env
+.npmrc
 .mtirc.local.json
 coverage/
 .DS_Store
