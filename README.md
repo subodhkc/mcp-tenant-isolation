@@ -5,7 +5,11 @@ Static analysis scanner for multi-tenant SaaS and MCP server code. Catches cross
 57 deterministic rules covering tenant isolation, database query filters, IDOR, cache key scoping, RLS, schema gaps, and MCP-specific risks (tool visibility, cache prefix, session binding, credential vault). Works with Prisma, Drizzle, raw SQL, Next.js, Express, and Fastify. Includes an MCP server for Claude Desktop and Cursor integration.
 
 [![npm version](https://img.shields.io/npm/v/mcp-tenant-isolation.svg)](https://www.npmjs.com/package/mcp-tenant-isolation)
+[![npm downloads](https://img.shields.io/npm/dm/mcp-tenant-isolation.svg)](https://www.npmjs.com/package/mcp-tenant-isolation)
+[![CI](https://github.com/subodhkc/mcp-tenant-isolation/actions/workflows/ci.yml/badge.svg)](https://github.com/subodhkc/mcp-tenant-isolation/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/docker/v/subodhkc/mcp-tenant-isolation?label=docker)](https://hub.docker.com/r/subodhkc/mcp-tenant-isolation)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/subodhkc/mcp-tenant-isolation?style=social)](https://github.com/subodhkc/mcp-tenant-isolation)
 
 ## Who is this for
 
