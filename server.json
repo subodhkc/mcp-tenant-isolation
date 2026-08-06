@@ -15,14 +15,6 @@
       "transport": {
         "type": "stdio"
       }
-    },
-    {
-      "registryType": "oci",
-      "identifier": "subodhkc/mcp-tenant-isolation",
-      "version": "1.6.2",
-      "transport": {
-        "type": "stdio"
-      }
     }
   ]
 }

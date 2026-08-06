@@ -180,7 +180,7 @@ export function parseJsFile(
   let ast: t.File;
   try {
     ast = parse(sourceCode, PARSE_OPTIONS) as t.File;
-  } catch (err) {
+  } catch (_err) {
     return {
       ir: {},
       file: {
