@@ -46,6 +46,10 @@ mti scan ./src --severity HIGH
 mti init
 ```
 
+## Demo
+
+![Terminal Demo](docs/terminal-demo.svg)
+
 ## Rules
 
 ### 42 General Multi-Tenant Rules
@@ -261,7 +265,7 @@ mti scan ./src --format sarif --output results.sarif
 
 ## Roadmap
 
-### v1.6.1 (Current)
+### v1.6.2 (Current)
 - 57 rules (42 general + 15 MCP-specific)
 - TypeScript and JavaScript support
 - Prisma schema analysis

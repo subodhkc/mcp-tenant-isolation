@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.2] - 2025-01
+
+### Added
+- 93 new tests across 7 test files (108 total, up from 15)
+  - `reporters.test.ts` — 27 tests for JSON, SARIF, Terminal, AI JSON, Markdown reporters
+  - `cli.test.ts` — 13 tests for CLI commands (scan, rules, init, version, help)
+  - `scanner.test.ts` — 11 integration tests for scanner end-to-end behavior
+  - `fp-filter.test.ts` — 8 tests for false positive filter logic
+  - `suppressions.test.ts` — 13 tests for suppression validation and application
+  - `mcp-server.test.ts` — 12 tests for MCP server tool logic
+  - `rule-packs.test.ts` — 9 tests for custom rule pack loading
+- `mcpName` field in `package.json` for MCP Registry submission
+- `server.json` for MCP Registry submission
+- `security-events: write` permission in CI workflow for SARIF upload
+
 ## [1.6.1] - 2025-01
 
 ### Added

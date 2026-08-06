@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" font-family="'Courier New', monospace">
+  <defs>
+    <linearGradient id="termBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a1b26"/>
+      <stop offset="100%" stop-color="#16161e"/>
+    </linearGradient>
+    <style>
+      .cursor { animation: blink 1s steps(2) infinite; }
+      @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+      .line1 { animation: fadeIn 0.3s 0.0s both; }
+      .line2 { animation: fadeIn 0.3s 0.3s both; }
+      .line3 { animation: fadeIn 0.3s 0.6s both; }
+      .line4 { animation: fadeIn 0.3s 0.9s both; }
+      .line5 { animation: fadeIn 0.3s 1.2s both; }
+      .line6 { animation: fadeIn 0.3s 1.5s both; }
+      .line7 { animation: fadeIn 0.3s 1.8s both; }
+      .line8 { animation: fadeIn 0.3s 2.1s both; }
+      .line9 { animation: fadeIn 0.3s 2.4s both; }
+      .line10 { animation: fadeIn 0.3s 2.7s both; }
+      .line11 { animation: fadeIn 0.3s 3.0s both; }
+      .line12 { animation: fadeIn 0.3s 3.3s both; }
+      .line13 { animation: fadeIn 0.3s 3.6s both; }
+      .line14 { animation: fadeIn 0.3s 3.9s both; }
+      .line15 { animation: fadeIn 0.3s 4.2s both; }
+      .line16 { animation: fadeIn 0.3s 4.5s both; }
+      .line17 { animation: fadeIn 0.3s 4.8s both; }
+      .line18 { animation: fadeIn 0.3s 5.1s both; }
+      .line19 { animation: fadeIn 0.3s 5.4s both; }
+      .line20 { animation: fadeIn 0.3s 5.7s both; }
+      .line21 { animation: fadeIn 0.3s 6.0s both; }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+  </defs>
+
+  <!-- Terminal window -->
+  <rect width="800" height="500" rx="8" fill="url(#termBg)"/>
+  <rect x="0" y="0" width="800" height="30" rx="8" fill="#2a2b3d"/>
+  <rect x="0" y="22" width="800" height="8" fill="#2a2b3d"/>
+  <circle cx="15" cy="15" r="6" fill="#ff5f56"/>
+  <circle cx="35" cy="15" r="6" fill="#ffbd2e"/>
+  <circle cx="55" cy="15" r="6" fill="#27c93f"/>
+  <text x="400" y="19" text-anchor="middle" fill="#7a7b8f" font-size="12">mti scan --path ./src</text>
+
+  <!-- Terminal output -->
+  <g font-size="13" fill="#c0caf5">
+    <text class="line1" x="20" y="55">$ npx mcp-tenant-isolation scan --path ./src</text>
+    <text class="line2" x="20" y="80" fill="#7a7b8f">  mcp-tenant-isolation - Tenant Isolation Scanner</text>
+    <text class="line3" x="20" y="100" fill="#7a7b8f">  -----------------------------------------------</text>
+    <text class="line4" x="20" y="125" fill="#7a7b8f">  Files scanned:    4</text>
+    <text class="line5" x="20" y="145" fill="#7a7b8f">  Rules evaluated:  57</text>
+    <text class="line6" x="20" y="165" fill="#7a7b8f">  Duration:         100ms</text>
+    <text class="line7" x="20" y="195" fill="#7a7b8f">  Findings by severity:</text>
+    <text class="line8" x="20" y="215" fill="#f7768e">    CRITICAL: 1</text>
+    <text class="line9" x="20" y="235" fill="#e0af68">    HIGH:     1</text>
+    <text class="line10" x="20" y="255" fill="#7dcfff">    MEDIUM:   1</text>
+    <text class="line11" x="20" y="275" fill="#7a7b8f">    Total:    3</text>
+    <text class="line12" x="20" y="305" fill="#f7768e" font-weight="bold">  Verdict: FAIL</text>
+    <text class="line13" x="20" y="335" fill="#7a7b8f">  Active Findings:</text>
+    <text class="line14" x="20" y="360" fill="#f7768e">  [CRITICAL] SCH-003</text>
+    <text class="line15" x="20" y="380" fill="#c0caf5">  Table with tenant column missing RLS</text>
+    <text class="line16" x="20" y="400" fill="#7a7b8f">  missing-rls.sql:3</text>
+    <text class="line17" x="20" y="420" fill="#9ece6a">  Fix: Enable RLS on tables with tenant columns.</text>
+    <text class="line18" x="20" y="450" fill="#e0af68">  [HIGH] SCH-001</text>
+    <text class="line19" x="20" y="470" fill="#c0caf5">  Prisma model missing tenant field</text>
+    <text class="line20" x="20" y="490" fill="#7a7b8f">  schema.prisma:4</text>
+  </g>
+
+  <!-- Blinking cursor -->
+  <rect class="cursor" x="20" y="50" width="8" height="16" fill="#c0caf5" opacity="0"/>
+</svg>
