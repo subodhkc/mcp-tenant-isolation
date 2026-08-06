@@ -1,6 +1,7 @@
 {
   "name": "mcp-tenant-isolation",
   "version": "1.6.1",
+  "mcpName": "io.github.subodhkc/mcp-tenant-isolation",
   "description": "Static analysis scanner for MCP server code and multi-tenant SaaS applications. 57 deterministic rules covering tenant isolation, tool visibility, cache key scoping, RLS, IDOR, and credential vault isolation. MCP server for AI agent integration.",
   "main": "dist/index.js",
   "bin": {

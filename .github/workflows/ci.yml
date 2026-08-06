@@ -11,6 +11,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       matrix:
         node-version: [18.x, 20.x]
