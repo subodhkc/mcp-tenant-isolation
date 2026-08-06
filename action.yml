@@ -1,4 +1,4 @@
-name: 'Tenant Isolation Scan'
+name: 'MCP Tenant Isolation Scan'
 description: 'Static analysis for multi-tenant SaaS and MCP server code. 57 rules for cross-tenant data leakage, IDOR, and RLS.'
 author: 'Subodh Kc'
 branding:
