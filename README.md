@@ -27,6 +27,9 @@ npm install -g mcp-tenant-isolation
 
 # or use npx (no install needed)
 npx mcp-tenant-isolation scan ./src
+
+# or use Docker (no Node.js needed)
+docker run --rm -v $(pwd):/code subodhkc/mcp-tenant-isolation scan /code/src
 ```
 
 ## Quick Start
