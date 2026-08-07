@@ -5,6 +5,11 @@
 import type { ScanResult, Finding, Severity } from '../types.js';
 import { RULE_ENGINE_VERSION, ALL_RULES } from '../rules/index.js';
 
+const SEVERITY_RANK: Record<Severity, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };
+
+function sortBySeverity<T extends { severity: Severity }>(items: T[]): T[] {
+  return [...items].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+}
 
 export function jsonReporter(result: ScanResult): string {
   return JSON.stringify({
@@ -13,7 +18,7 @@ export function jsonReporter(result: ScanResult): string {
     timestamp: result.ir.scanTimestamp,
     durationMs: result.durationMs,
     stats: result.stats,
-    findings: result.findings,
+    findings: sortBySeverity(result.findings),
   }, null, 2);
 }
 
@@ -30,13 +35,13 @@ const REMEDIATION_HINTS: Record<string, string> = {
   'DBQ-003': 'Add organizationId to update/delete where clause. Example: prisma.model.update({ where: { id, organizationId } })',
   'DBQ-004': 'Add tenant filter to raw SQL queries. Use parameterized tenantId in WHERE clause. Never concatenate tenantId into SQL strings.',
   'DBQ-005': 'Add organizationId to Drizzle query where clause. Example: db.select().from(table).where(eq(table.organizationId, tenantId))',
-  'DBQ-006': 'Add tenant filter to createMany calls. Either include organizationId in the data array or use a createWithTenant wrapper.',
-  'DBQ-007': 'Add tenant filter to deleteMany calls. Example: prisma.model.deleteMany({ where: { organizationId } })',
+  'DBQ-006': 'Enable RLS on tenant-scoped tables that receive queries. Example: ALTER TABLE ... ENABLE ROW LEVEL SECURITY; CREATE POLICY ... USING (organization_id = current_setting(\'app.organization_id\')::uuid)',
+  'DBQ-007': 'Replace USING(true) / WITH CHECK(true) with tenant-specific predicate. Example: USING (organization_id = current_setting(\'app.organization_id\')::uuid)',
   'DBQ-008': 'Add organizationId to Prisma include/select nested queries. Use where inside include: { child: { where: { organizationId } } }',
   'DBQ-009': 'Add organizationId filter to aggregate/count/groupBy queries. Example: prisma.model.aggregate({ where: { organizationId }, _count: true })',
   'DBQ-010': 'Add organizationId to upsert where clause. Example: prisma.model.upsert({ where: { id_organizationId: { id, organizationId } }, ... })',
   'IDOR-001': 'Verify that the requested resource belongs to the caller tenant before returning it. Add a tenant ownership check after fetch.',
-  'IDOR-002': 'Do not use sequential or guessable IDs for tenant-scoped resources. Use UUIDs or nanoids to prevent enumeration attacks.',
+  'IDOR-002': 'Add tenant ownership verification to API routes that accept record IDs. Verify result.organizationId matches session tenant before returning data. Example: if (result.organizationId !== req.tenantId) return 403.',
   'IDOR-003': 'Verify tenant ownership before returning resource by ID. Add: if (result.organizationId !== req.tenantId) return 403.',
   'IDOR-004': 'Check tenant ownership before allowing update/delete operations. Verify result.organizationId matches session tenant before modifying.',
   'IDOR-005': 'Validate that bulk operations do not cross tenant boundaries. Check all referenced IDs belong to the caller tenant before processing.',
@@ -52,15 +57,15 @@ const REMEDIATION_HINTS: Record<string, string> = {
   'FSI-003': 'Use tenant-scoped S3 bucket prefixes or separate buckets per tenant. Never use shared prefixes without tenant ID in the key.',
   'FSI-004': 'Add tenant ID to blob storage metadata. Use Azure Blob tags or S3 metadata to tag objects with tenantId for access control.',
   'LOG-001': 'Include organizationId/tenantId in log entries for tenant attribution. Add tenant context to your structured logger.',
-  'LOG-002': 'Do not log tenant secrets or PII at INFO level. Use DEBUG level for sensitive data and sanitize before logging.',
-  'LOG-003': 'Avoid logging sensitive tenant data. Use structured logging with tenant context and redaction rules.',
-  'LOG-004': 'Include tenant ID in audit log entries. Audit logs must be traceable to a specific tenant for compliance.',
+  'LOG-002': 'Include organizationId/tenantId in audit log entries for data access. Audit logs must be traceable to a specific tenant for compliance.',
+  'LOG-003': 'Avoid logging raw database results near unfiltered queries. Add tenant context to error logs and redact sensitive data from error messages.',
+  'LOG-004': 'Do not strip tenantId from structured log output. Ensure logging configuration preserves tenant context for audit traceability.',
   'SCH-001': 'Add organizationId field to the Prisma model, or mark it as user-scoped/global in .mtirc.json if intentionally non-tenant.',
-  'SCH-002': 'Add tenant column as first field in compound indexes. Example: @@index([organizationId, ...otherFields])',
-  'SCH-003': 'Enable RLS on tables with tenant columns. Example: ALTER TABLE ... ENABLE ROW LEVEL SECURITY;',
-  'SCH-004': 'Add tenant column to SQL CREATE TABLE statements. Include organizationId UUID NOT NULL in tenant-scoped tables.',
-  'SCH-005': 'Add a tenant-first index on tables with tenant columns for query performance.',
-  'SCH-006': 'Add tenant column to SQL migration ALTER TABLE statements when adding tenant scoping to existing tables.',
+  'SCH-002': 'Add organizationId or tenantId column to CREATE TABLE statements in SQL migrations for tenant-scoped tables.',
+  'SCH-003': 'Add tenant column as first field in compound indexes. Example: @@index([organizationId, ...otherFields])',
+  'SCH-004': 'Enable RLS on tables with tenant columns. Example: ALTER TABLE ... ENABLE ROW LEVEL SECURITY;',
+  'SCH-005': 'Replace USING(true) / WITH CHECK(true) with tenant-specific predicate. Example: USING (organization_id = current_setting(\'app.organization_id\')::uuid)',
+  'SCH-006': 'Add tenant column to foreign key relationships. Include organizationId in FK references to prevent cross-tenant references.',
   'MCP-001': 'Filter MCP tool visibility by tenant. Use tenantToolFilter or allowedTools per tenant in the MCP server configuration.',
   'MCP-002': 'Prefix MCP cache keys with tenantId. Use cache key format: mcp:{tenantId}:{toolName}:{paramsHash}.',
   'MCP-003': 'Bind MCP sessions to both user and tenant. Include userId and tenantId in session creation and validate on every request.',
@@ -90,13 +95,13 @@ const RULE_CONTEXT: Record<string, string> = {
   'DBQ-003': 'This rule detects update/delete operations without a tenant field in the WHERE clause, allowing cross-tenant modification.',
   'DBQ-004': 'This rule detects raw SQL queries ($queryRaw, $executeRaw) without a tenant filter in the WHERE clause. Raw SQL bypasses ORM-level tenant scoping.',
   'DBQ-005': 'This rule detects Drizzle ORM queries that lack a tenant filter in the where clause. Same risk as DBQ-001 but for Drizzle users.',
-  'DBQ-006': 'This rule detects createMany calls without organizationId in the data. Bulk inserts without tenant context create orphan records accessible by any tenant.',
-  'DBQ-007': 'This rule detects deleteMany calls without a tenant filter. Without it, a single call can delete records across all tenants.',
+  'DBQ-006': 'This rule detects tenant-scoped tables with active database queries but no RLS policy enabled. Cross-tenant data access is possible at the database level.',
+  'DBQ-007': 'This rule detects RLS policies that use USING(true) or WITH CHECK(true), effectively disabling row-level security. Queries on these tables are not isolated.',
   'DBQ-008': 'This rule detects Prisma include/select nested queries without tenant filters on the included relations. Parent-level filtering does not protect nested reads.',
   'DBQ-009': 'This rule detects aggregate/count/groupBy queries without a tenant filter. Aggregates across tenants leak statistics and counts.',
   'DBQ-010': 'This rule detects upsert calls without a tenant filter in the where clause. Upserts may create or update records in the wrong tenant.',
   'IDOR-001': 'This rule detects direct object references without tenant ownership verification. Accessing resources by ID without checking tenant ownership is a classic IDOR vulnerability.',
-  'IDOR-002': 'This rule detects use of sequential integer IDs for tenant-scoped resources. Sequential IDs are enumerable, allowing attackers to guess valid resource IDs.',
+  'IDOR-002': 'This rule detects API routes that accept record IDs from the client without verifying the record belongs to the caller tenant. Classic IDOR vulnerability via route parameter.',
   'IDOR-003': 'This rule detects findUnique by ID without subsequent tenant ownership check. The lookup returns the record regardless of tenant, enabling cross-tenant access.',
   'IDOR-004': 'This rule detects update/delete by ID without tenant ownership verification. An attacker can modify or delete another tenant resources by guessing IDs.',
   'IDOR-005': 'This rule detects bulk operations that reference multiple IDs without verifying all belong to the caller tenant. Bulk endpoints may mix tenant data.',
@@ -112,15 +117,15 @@ const RULE_CONTEXT: Record<string, string> = {
   'FSI-003': 'This rule detects S3/blob storage calls without tenant-scoped bucket prefixes. Shared prefixes allow cross-tenant file enumeration and access.',
   'FSI-004': 'This rule detects blob storage uploads without tenant metadata. Files without tenant metadata cannot be access-controlled at the storage layer.',
   'LOG-001': 'This rule detects logging calls without tenant context, making it impossible to attribute logs to specific tenants for auditing.',
-  'LOG-002': 'This rule detects logging of sensitive tenant data (secrets, PII) at INFO or DEBUG level. This exposes tenant data in log aggregation systems.',
-  'LOG-003': 'This rule detects unstructured logging without tenant context. Unstructured logs cannot be filtered by tenant for incident response.',
-  'LOG-004': 'This rule detects audit log entries without tenant ID. Audit logs without tenant attribution fail compliance requirements (SOC 2, ISO 27001).',
+  'LOG-002': 'This rule detects audit log entries for data access operations that do not include tenant context. Audit logs without tenant attribution fail compliance requirements.',
+  'LOG-003': 'This rule detects error logging near unfiltered database operations. Error logs may include cross-tenant data from query results.',
+  'LOG-004': 'This rule detects structured logging configurations that strip tenantId from log output. Audit trails cannot attribute actions to specific tenants.',
   'SCH-001': 'This rule detects Prisma models without a tenant isolation field (organizationId, tenantId). Models without tenant fields cannot be isolated at the data level.',
-  'SCH-002': 'This rule detects indexes that do not start with the tenant column, causing queries to scan across tenants and reducing performance.',
-  'SCH-003': 'This rule detects SQL tables with tenant columns but no RLS enabled. RLS provides defense-in-depth at the database level.',
-  'SCH-004': 'This rule detects CREATE TABLE statements without a tenant column. Tables without tenant columns cannot be isolated.',
-  'SCH-005': 'This rule detects tables with tenant columns but no index starting with the tenant column. Query performance degrades across tenants.',
-  'SCH-006': 'This rule detects ALTER TABLE migrations that add columns without adding tenant scoping. Migrations may introduce non-isolated tables.',
+  'SCH-002': 'This rule detects SQL CREATE TABLE statements without a tenant column. Tables without tenant columns cannot be isolated at the data level.',
+  'SCH-003': 'This rule detects indexes that do not start with the tenant column, causing queries to scan across tenants and reducing performance.',
+  'SCH-004': 'This rule detects SQL tables with tenant columns but no RLS enabled. RLS provides defense-in-depth at the database level.',
+  'SCH-005': 'This rule detects RLS policies that use USING(true) or WITH CHECK(true), effectively disabling row-level security for all tenants.',
+  'SCH-006': 'This rule detects foreign key relationships without tenant column. Allows cross-tenant references between tables.',
   'MCP-001': 'This rule detects MCP tool handlers without tenant-based visibility filtering. All tenants see all tools, including tools scoped to specific tenants.',
   'MCP-002': 'This rule detects MCP tool result caching without tenant prefix in cache keys. Cached results from one tenant may be served to another.',
   'MCP-003': 'This rule detects MCP sessions bound only to a session ID without user or tenant binding. Session hijacking enables cross-tenant access.',
@@ -139,7 +144,7 @@ const RULE_CONTEXT: Record<string, string> = {
 };
 
 export function aiJsonReporter(result: ScanResult): string {
-  const findingsWithContext = result.findings.map(f => ({
+  const findingsWithContext = sortBySeverity(result.findings).map(f => ({
     ...f,
     remediation: REMEDIATION_HINTS[f.ruleId] ?? 'Review the finding and add appropriate tenant isolation guards.',
     context: RULE_CONTEXT[f.ruleId] ?? '',
@@ -175,7 +180,7 @@ export function aiJsonReporter(result: ScanResult): string {
         .reduce((acc, [k, v]) => { acc[k] = v; return acc; }, {} as Record<string, any>),
       topPriorities: Object.entries(byRule)
         .filter(([, v]) => v.severity === 'CRITICAL' || v.severity === 'HIGH')
-        .sort(([, a], [, b]) => b.count - a.count)
+        .sort(([, a], [, b]) => SEVERITY_RANK[a.severity as Severity] - SEVERITY_RANK[b.severity as Severity] || b.count - a.count)
         .slice(0, 5)
         .map(([k, v]) => ({ ruleId: k, count: v.count, severity: v.severity })),
     },
@@ -198,7 +203,7 @@ export function sarifReporter(result: ScanResult): string {
             rules: getSarifRules(),
           },
         },
-        results: result.findings.map((f) => toSarifResult(f)),
+        results: sortBySeverity(result.findings).map((f) => toSarifResult(f)),
       },
     ],
   };
@@ -212,7 +217,7 @@ function getSarifRules() {
     name: r.title,
     shortDescription: { text: r.title },
     fullDescription: { text: r.description },
-    helpUri: `https://github.com/subodhkc/mcp-tenant-isolation#rule-${r.id.toLowerCase()}`,
+    helpUri: `https://www.haiec.com/mcp-tenant-isolation#rule-${r.id.toLowerCase()}`,
     defaultConfiguration: { level: severityToSarifLevel(r.severity) },
     properties: {
       category: r.category,
@@ -322,7 +327,7 @@ export function terminalReporter(result: ScanResult): string {
   }
 
   // Findings (show active first, then suppressed/baseline)
-  const active = findings.filter(f => f.suppressionStatus !== 'suppressed' && f.suppressionStatus !== 'baseline');
+  const active = sortBySeverity(findings.filter(f => f.suppressionStatus !== 'suppressed' && f.suppressionStatus !== 'baseline'));
   const others = findings.filter(f => f.suppressionStatus === 'suppressed' || f.suppressionStatus === 'baseline');
 
   if (active.length > 0) {
@@ -416,7 +421,11 @@ export function markdownReporter(result: ScanResult): string {
 
   lines.push('## Active Findings');
   lines.push('');
-  for (const [ruleId, ruleFindings] of Object.entries(byRule).sort((a, b) => b[1].length - a[1].length)) {
+  for (const [ruleId, ruleFindings] of Object.entries(byRule).sort((a, b) => {
+    const sevA = a[1][0]?.severity ?? 'INFO';
+    const sevB = b[1][0]?.severity ?? 'INFO';
+    return SEVERITY_RANK[sevA] - SEVERITY_RANK[sevB] || b[1].length - a[1].length;
+  })) {
     const first = ruleFindings[0];
     lines.push(`### ${ruleId} - ${first.title} (${ruleFindings.length} findings)`);
     lines.push('');

@@ -155,3 +155,63 @@ describe('SQL Parser', () => {
     expect(withoutRls[0].name).toBe('posts');
   });
 });
+
+// ============================================
+// MCP CONTEXT DETECTION TESTS
+// ============================================
+
+describe('MCP Context Detection', () => {
+  it('should not detect MCP credential vaults in non-MCP files', () => {
+    const code = readFileSync(join(fixturesDir, 'non-mcp-apikey.ts'), 'utf-8');
+    const result = parseJsFile(code, 'non-mcp-apikey.ts', '/test');
+
+    expect(result.ir.mcpCredentialVaults).toBeDefined();
+    expect(result.ir.mcpCredentialVaults!.length).toBe(0);
+  });
+
+  it('should not detect MCP sessions in non-MCP files', () => {
+    const code = readFileSync(join(fixturesDir, 'non-mcp-apikey.ts'), 'utf-8');
+    const result = parseJsFile(code, 'non-mcp-apikey.ts', '/test');
+
+    expect(result.ir.mcpSessions).toBeDefined();
+    expect(result.ir.mcpSessions!.length).toBe(0);
+  });
+
+  it('should detect MCP tools in MCP context files', () => {
+    const code = readFileSync(join(fixturesDir, 'mcp-tool-registration.ts'), 'utf-8');
+    const result = parseJsFile(code, 'mcp-tool-registration.ts', '/test');
+
+    expect(result.ir.mcpTools).toBeDefined();
+    expect(result.ir.mcpTools!.length).toBeGreaterThan(0);
+    expect(result.ir.mcpTools![0].name).toBe('getUserData');
+  });
+});
+
+// ============================================
+// GLOBAL MODEL SCOPE TESTS
+// ============================================
+
+describe('Global Model Scope', () => {
+  it('should parse global-model-query fixture without errors', () => {
+    const code = readFileSync(join(fixturesDir, 'global-model-query.ts'), 'utf-8');
+    const result = parseJsFile(code, 'global-model-query.ts', '/test');
+
+    expect(result.ir.sinks).toBeDefined();
+    const dbSinks = result.ir.sinks!.filter((s) => s.kind === 'db_read');
+    expect(dbSinks.length).toBeGreaterThan(0);
+    expect(dbSinks[0].api).toContain('findMany');
+  });
+
+  it('should identify SystemConfig as a global model from schema', () => {
+    const code = readFileSync(join(fixturesDir, 'schema-global-model.prisma'), 'utf-8');
+    const result = parsePrismaSchema(code, 'schema.prisma', '/test');
+
+    const systemConfig = result.models.find((m) => m.name === 'SystemConfig');
+    expect(systemConfig).toBeDefined();
+    expect(systemConfig!.hasTenantField).toBe(false);
+
+    const post = result.models.find((m) => m.name === 'Post');
+    expect(post).toBeDefined();
+    expect(post!.hasTenantField).toBe(true);
+  });
+});

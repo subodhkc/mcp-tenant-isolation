@@ -20,18 +20,7 @@ import {
   findMissingGuards,
   findPresentGuards,
 } from '../guards.js';
-import type { Finding, IR } from '../types.js';
-
-/**
- * Check if a file has any auth signals (e.g., requireOrganizationAccess, getServerSession).
- * If auth is present in the file, DBQ/API findings should be suppressed or downgraded
- * since the route enforces tenant context at the application level.
- */
-function fileHasAuthSignal(ir: IR, file: string): boolean {
-  return ir.authSignals.some(
-    (sig) => sig.location.file === file
-  );
-}
+import type { Finding, IR, Sink, PrismaModelInfo } from '../types.js';
 
 /**
  * Check if a file has any auth signals within the same function scope as a sink.
@@ -50,6 +39,28 @@ function functionHasAuthSignal(
     }
     return true; // fallback to file-level if no function range
   });
+}
+
+/**
+ * Extract the Prisma model name from a sink API string.
+ * e.g., "prisma.user.findMany" → "user", "db.organization.update" → "organization"
+ */
+function getModelNameFromSink(sink: Sink): string | null {
+  const match = sink.api.match(/(?:prisma|db|tx|transaction|connection|drizzle|pool|supabase|kysely)\.(\w+)\./);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Check if a model is tenant-scoped based on Prisma schema info.
+ * Returns true for unknown models (safe default — don't suppress findings).
+ */
+function isTenantScopedModel(ir: IR, modelName: string | null): boolean {
+  if (!modelName) return true; // Unknown model — don't suppress
+  const model = ir.prismaModels?.find(
+    (m: PrismaModelInfo) => m.name.toLowerCase() === modelName.toLowerCase()
+  );
+  if (!model) return true; // Unknown model — don't suppress
+  return model.hasTenantField || model.scope === 'tenant';
 }
 
 // TCM - Tenant Context Management (6)
@@ -287,6 +298,7 @@ const DBQ_001 = createRule({
     const findings = [];
     for (const sink of ir.sinks) {
       if (sink.kind === 'db_read' && sink.api.includes('findMany')) {
+        if (!isTenantScopedModel(ir, getModelNameFromSink(sink))) continue;
         const hasTenant = ir.tenantScopes.some(
           (ts) => ts.appliesToSinkId === sink.id && ts.hasTenantFilter
         );
@@ -318,7 +330,7 @@ const DBQ_002 = createRule({
   title: 'findUnique by ID without tenant ownership',
   description:
     'findUnique query uses only ID without verifying tenant ownership. Allows IDOR.',
-  severity: 'CRITICAL',
+  severity: 'HIGH',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
   cweIds: ['CWE-639', 'CWE-284'],
   executionOrder: 21,
@@ -326,6 +338,7 @@ const DBQ_002 = createRule({
     const findings = [];
     for (const sink of ir.sinks) {
       if (sink.kind === 'db_read' && sink.api.includes('findUnique')) {
+        if (!isTenantScopedModel(ir, getModelNameFromSink(sink))) continue;
         const hasTenant = ir.tenantScopes.some(
           (ts) => ts.appliesToSinkId === sink.id && ts.hasTenantFilter
         );
@@ -335,7 +348,7 @@ const DBQ_002 = createRule({
             buildFinding(
               'DBQ-002',
               'findUnique by ID without tenant ownership',
-              'CRITICAL',
+              'HIGH',
               'findUnique by ID only - no tenant ownership check. IDOR risk.',
               buildEvidence(sink.location.file, sink.location.line, sink.location.line, sink.api),
               [...TENANT_ISOLATION_GUARDS],
@@ -366,6 +379,7 @@ const DBQ_003 = createRule({
         sink.kind === 'db_write' &&
         (sink.api.includes('update') || sink.api.includes('delete'))
       ) {
+        if (!isTenantScopedModel(ir, getModelNameFromSink(sink))) continue;
         const hasTenant = ir.tenantScopes.some(
           (ts) => ts.appliesToSinkId === sink.id && ts.hasTenantFilter
         );
@@ -472,7 +486,7 @@ const DBQ_006 = createRule({
   title: 'Missing RLS policy on tenant-scoped table',
   description:
     'Tenant-scoped table does not have Row Level Security policy enabled.',
-  severity: 'CRITICAL',
+  severity: 'MEDIUM',
   requiredGuards: ['row_level_security', 'rls'],
   cweIds: ['CWE-639', 'CWE-668'],
   executionOrder: 25,
@@ -482,15 +496,16 @@ const DBQ_006 = createRule({
     const rlsEnabled = ir.sqlRlsEnabledTables ?? [];
     for (const table of tables) {
       if (table.hasTenantColumn && !rlsEnabled.includes(table.name)) {
+        const tableNameLower = table.name.toLowerCase();
         const hasQuery = ir.sinks.some(
-          (s) => s.kind === 'db_read' && s.api.toLowerCase().includes(table.name.toLowerCase())
+          (s) => s.kind === 'db_read' && getModelNameFromSink(s)?.toLowerCase() === tableNameLower
         );
         if (hasQuery) {
           findings.push(
             buildFinding(
               'DBQ-006',
               'Missing RLS policy on tenant-scoped table',
-              'CRITICAL',
+              'MEDIUM',
               `Database queries on table "${table.name}" are not protected by RLS. Cross-tenant data access is possible.`,
               buildEvidence(table.location.file, table.location.line, table.location.line, `CREATE TABLE ${table.name}`),
               ['row_level_security', 'rls'],
@@ -519,8 +534,9 @@ const DBQ_007 = createRule({
     const policies = ir.sqlRlsPolicies ?? [];
     for (const policy of policies) {
       if (policy.isBypassed) {
+        const policyTableLower = policy.tableName.toLowerCase();
         const hasQuery = ir.sinks.some(
-          (s) => s.kind === 'db_read' && s.api.toLowerCase().includes(policy.tableName.toLowerCase())
+          (s) => s.kind === 'db_read' && getModelNameFromSink(s)?.toLowerCase() === policyTableLower
         );
         if (hasQuery) {
           findings.push(
@@ -555,6 +571,7 @@ const DBQ_008 = createRule({
     const findings = [];
     for (const sink of ir.sinks) {
       if (sink.kind === 'db_read' && (sink.api.includes('include:') || sink.api.includes('select:'))) {
+        if (!isTenantScopedModel(ir, getModelNameFromSink(sink))) continue;
         const hasTenant = hasGuard(sink.api, TENANT_ISOLATION_GUARDS) ||
           hasGuard(sink.argsVars.join(' '), TENANT_ISOLATION_GUARDS) ||
           ir.tenantScopes.some((ts) => ts.appliesToSinkId === sink.id && ts.hasTenantFilter);
@@ -584,7 +601,7 @@ const DBQ_009 = createRule({
   title: 'Aggregate query without tenant filter',
   description:
     'Aggregate query (count, aggregate, groupBy) on tenant-scoped model without tenant filter.',
-  severity: 'CRITICAL',
+  severity: 'HIGH',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
   cweIds: ['CWE-639', 'CWE-200'],
   executionOrder: 28,
@@ -595,6 +612,7 @@ const DBQ_009 = createRule({
         sink.kind === 'db_read' &&
         (sink.api.includes('count') || sink.api.includes('aggregate') || sink.api.includes('groupBy'))
       ) {
+        if (!isTenantScopedModel(ir, getModelNameFromSink(sink))) continue;
         const hasTenant = ir.tenantScopes.some(
           (ts) => ts.appliesToSinkId === sink.id && ts.hasTenantFilter
         );
@@ -604,7 +622,7 @@ const DBQ_009 = createRule({
             buildFinding(
               'DBQ-009',
               'Aggregate query without tenant filter',
-              'CRITICAL',
+              'HIGH',
               'Aggregate query without tenant filter. Cross-tenant data leakage.',
               buildEvidence(sink.location.file, sink.location.line, sink.location.line, sink.api),
               [...TENANT_ISOLATION_GUARDS],
@@ -632,6 +650,7 @@ const DBQ_010 = createRule({
     const findings = [];
     for (const sink of ir.sinks) {
       if (sink.kind === 'db_write' && sink.api.includes('upsert')) {
+        if (!isTenantScopedModel(ir, getModelNameFromSink(sink))) continue;
         const hasTenant = hasGuard(sink.api, TENANT_ISOLATION_GUARDS) ||
           hasGuard(sink.argsVars.join(' '), TENANT_ISOLATION_GUARDS) ||
           ir.tenantScopes.some((ts) => ts.appliesToSinkId === sink.id && ts.hasTenantFilter);
@@ -671,6 +690,7 @@ const IDOR_001 = createRule({
     const findings = [];
     for (const sink of ir.sinks) {
       if (sink.kind === 'db_read' && sink.api.includes('findUnique') && sink.api.includes('id:')) {
+        if (!isTenantScopedModel(ir, getModelNameFromSink(sink))) continue;
         const hasTenant = hasGuard(sink.api, TENANT_ISOLATION_GUARDS) ||
           hasGuard(sink.argsVars.join(' '), TENANT_ISOLATION_GUARDS) ||
           ir.tenantScopes.some((ts) => ts.appliesToSinkId === sink.id && ts.hasTenantFilter);
@@ -853,21 +873,25 @@ const CSI_001 = createRule({
   title: 'Redis cache key without tenant prefix',
   description:
     'Redis cache key does not include tenant prefix. Cross-tenant cache poisoning possible.',
-  severity: 'HIGH',
+  severity: 'LOW',
   requiredGuards: ['tenantPrefix', 'cachePrefix', 'keyPrefix', 'namespacePrefix', 'tenantCacheKey', 'scopedCacheKey', 'tenantId', 'organizationId'],
   cweIds: ['CWE-639'],
   executionOrder: 40,
   evaluate: (ir) => {
     const findings = [];
+    const CLIENT_SIDE_PATH_PATTERNS = ['/hooks/', '/components/', '/lib/llmverify/hooks/'];
     for (const sink of ir.sinks) {
       if (sink.kind === 'cache_write' || sink.kind === 'cache_read') {
+        // Skip client-side cache (React Query, SWR, etc.) — not server-side Redis
+        const isClientSide = CLIENT_SIDE_PATH_PATTERNS.some((p) => sink.location.file.includes(p));
+        if (isClientSide) continue;
         const hasTenant = hasGuard(sink.api, TENANT_ISOLATION_GUARDS);
         if (!hasTenant) {
           findings.push(
             buildFinding(
               'CSI-001',
               'Redis cache key without tenant prefix',
-              'HIGH',
+              'LOW',
               'Cache key without tenant prefix. Cross-tenant cache poisoning.',
               buildEvidence(sink.location.file, sink.location.line, sink.location.line, sink.api),
               ['tenantPrefix', 'cachePrefix', 'keyPrefix'],
@@ -1037,7 +1061,7 @@ const API_002 = createRule({
   title: 'API response includes cross-tenant data',
   description:
     'API response includes data from multiple tenants. Over-fetching beyond tenant boundary.',
-  severity: 'HIGH',
+  severity: 'MEDIUM',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
   cweIds: ['CWE-200'],
   executionOrder: 51,
@@ -1051,14 +1075,14 @@ const API_002 = createRule({
         const hasTenant = ir.tenantScopes.some(
           (ts) => ts.appliesToSinkId === sink.id && ts.hasTenantFilter
         );
-        const hasAuth = fileHasAuthSignal(ir, sink.location.file);
+        const hasAuth = functionHasAuthSignal(ir, sink.location.file, sink.functionStartLine, sink.functionEndLine);
         if (!hasTenant && !hasAuth) {
           seenFiles.add(sink.location.file);
           findings.push(
             buildFinding(
               'API-002',
               'API response includes cross-tenant data',
-              'HIGH',
+              'MEDIUM',
               'API route has database query without tenant filter. Response may include cross-tenant data.',
               buildEvidence(sink.location.file, sink.location.line, sink.location.line, sink.api),
               [...TENANT_ISOLATION_GUARDS],
@@ -1078,7 +1102,7 @@ const API_003 = createRule({
   title: 'Missing tenantId in API response metadata',
   description:
     'API response does not include tenantId in metadata. Impossible to attribute API calls to tenants.',
-  severity: 'HIGH',
+  severity: 'MEDIUM',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
   cweIds: ['CWE-778'],
   executionOrder: 52,
@@ -1093,14 +1117,14 @@ const API_003 = createRule({
           (ts) => ts.location.file === sink.location.file
         );
         const hasAnyTenant = fileScopes.some((ts) => ts.hasTenantFilter);
-        const hasAuth = fileHasAuthSignal(ir, sink.location.file);
+        const hasAuth = functionHasAuthSignal(ir, sink.location.file, sink.functionStartLine, sink.functionEndLine);
         if (!hasAnyTenant && !hasAuth) {
           seenFiles.add(sink.location.file);
           findings.push(
             buildFinding(
               'API-003',
               'Missing tenantId in API response metadata',
-              'HIGH',
+              'MEDIUM',
               'API route has no tenant context in any database operation. Response metadata cannot attribute calls to tenants.',
               buildEvidence(sink.location.file, sink.location.line, sink.location.line, sink.api),
               [...TENANT_ISOLATION_GUARDS],
@@ -1260,7 +1284,7 @@ const LOG_001 = createRule({
   title: 'Log entry missing tenantId',
   description:
     'Log entry does not include tenantId. Impossible to attribute log entries to tenants.',
-  severity: 'MEDIUM',
+  severity: 'INFO',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
   cweIds: ['CWE-778'],
   executionOrder: 70,
@@ -1268,6 +1292,17 @@ const LOG_001 = createRule({
     const findings = [];
     for (const sink of ir.sinks) {
       if (sink.kind === 'log') {
+        // Only flag logs in API routes or server-side handler files
+        const isApiFile = sink.location.file.includes('/api/') ||
+          sink.location.file.includes('route.ts') ||
+          sink.location.file.includes('server.ts') ||
+          sink.location.file.includes('handler.ts');
+        if (!isApiFile) continue;
+
+        // Only flag structured log calls (object args), skip plain string logs
+        const hasStructuredArgs = sink.argsVars.some(a => a.includes('{'));
+        if (!hasStructuredArgs) continue;
+
         const hasTenant = hasGuard(sink.api, TENANT_ISOLATION_GUARDS) ||
           hasGuard(sink.argsVars.join(' '), TENANT_ISOLATION_GUARDS);
         if (!hasTenant) {
@@ -1275,7 +1310,7 @@ const LOG_001 = createRule({
             buildFinding(
               'LOG-001',
               'Log entry missing tenantId',
-              'MEDIUM',
+              'INFO',
               'Log entry without tenantId. Cannot attribute to tenant.',
               buildEvidence(sink.location.file, sink.location.line, sink.location.line, sink.api),
               [...TENANT_ISOLATION_GUARDS],
@@ -1330,7 +1365,7 @@ const LOG_003 = createRule({
   title: 'Error log includes cross-tenant data',
   description:
     'Error log includes data from multiple tenants. Cross-tenant data leakage via logs.',
-  severity: 'MEDIUM',
+  severity: 'INFO',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
   cweIds: ['CWE-200', 'CWE-532'],
   executionOrder: 72,
@@ -1342,19 +1377,24 @@ const LOG_003 = createRule({
           (s) =>
             (s.kind === 'db_read' || s.kind === 'db_write') &&
             s.location.file === sink.location.file &&
-            Math.abs(s.location.line - sink.location.line) <= 10
+            Math.abs(s.location.line - sink.location.line) <= 5
+        );
+        // Only flag if the error log actually references a DB result variable
+        const logArgs = sink.argsVars.join(' ');
+        const referencesDbResult = nearbyDbSinks.some((dbSink) =>
+          dbSink.argsVars.some((v) => logArgs.includes(v))
         );
         const hasUnfilteredDb = nearbyDbSinks.some(
           (dbSink) => !ir.tenantScopes.some(
             (ts) => ts.appliesToSinkId === dbSink.id && ts.hasTenantFilter
           )
         );
-        if (hasUnfilteredDb) {
+        if (hasUnfilteredDb && referencesDbResult) {
           findings.push(
             buildFinding(
               'LOG-003',
               'Error log includes cross-tenant data',
-              'MEDIUM',
+              'INFO',
               'Error logging near unfiltered database operations may log cross-tenant data.',
               buildEvidence(sink.location.file, sink.location.line, sink.location.line, sink.api),
               [...TENANT_ISOLATION_GUARDS],
@@ -1412,7 +1452,7 @@ const SCH_001 = createRule({
   title: 'Prisma model without tenant field',
   description:
     'Prisma model does not include tenant field (organizationId, tenantId, workspaceId).',
-  severity: 'HIGH',
+  severity: 'MEDIUM',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
   cweIds: ['CWE-639'],
   executionOrder: 80,
@@ -1444,7 +1484,7 @@ const SCH_003 = createRule({
   title: 'Index without tenant column as first field',
   description:
     'Database index does not include tenant column as the first field. Inefficient tenant-scoped queries.',
-  severity: 'HIGH',
+  severity: 'MEDIUM',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
   cweIds: ['CWE-639'],
   executionOrder: 82,

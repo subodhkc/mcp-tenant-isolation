@@ -23,7 +23,7 @@ describe('Scanner Integration', () => {
 
     expect(result.findings.length).toBeGreaterThan(0);
     expect(result.findings.some(f => f.ruleId === 'SCH-001')).toBe(true);
-    expect(result.findings.some(f => f.ruleId === 'SCH-003')).toBe(true);
+    expect(result.findings.some(f => f.ruleId === 'SCH-004')).toBe(true);
   });
 
   it('should populate bySeverity stats correctly', async () => {

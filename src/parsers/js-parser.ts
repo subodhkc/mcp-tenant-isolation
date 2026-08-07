@@ -134,17 +134,88 @@ const DB_CLIENT_PREFIXES = [
   'db.',
   'tx.',
   'transaction.',
-  'client.',
   'connection.',
   'drizzle.',
   'pool.',
-  'query.',
   'supabase.',
   'kysely.',
 ];
 
 function isDbClient(callee: string): boolean {
   return DB_CLIENT_PREFIXES.some((prefix) => callee.startsWith(prefix));
+}
+
+const MCP_CONTEXT_PATTERNS = [
+  '@modelcontextprotocol/sdk',
+  'server.tool(',
+  'mcpServer.tool(',
+  'registerTool(',
+  'tools.set(',
+  'McpServer',
+  'mcpServer',
+  'createMcpServer',
+];
+
+function hasMcpContext(sourceCode: string): boolean {
+  return MCP_CONTEXT_PATTERNS.some((pattern) => sourceCode.includes(pattern));
+}
+
+const MCP_CREDENTIAL_VAULT_PATTERNS = [
+  'vault.get',
+  'vault.retrieve',
+  'vault.fetch',
+  'credentialStore.get',
+  'credentialStore.retrieve',
+  'secretsManager.getSecret',
+  'getCredential(',
+  'retrieveCredential(',
+  'tenantCredentials.get',
+  'scopedCredentials.get',
+];
+
+const MCP_SESSION_PATTERNS = [
+  'mcpServer.createSession',
+  'mcp.createSession',
+  'sessionManager.create',
+];
+
+const OBJECT_STORAGE_PATTERNS = [
+  'putObject',
+  'getObject',
+  's3.upload',
+  'bucket.upload',
+  'blob.upload',
+  'blob.put',
+  'blob.get',
+  'storage.upload',
+  'presign',
+  'getSignedUrl',
+];
+
+const VECTOR_SEARCH_PATTERNS = [
+  'vectorSearch',
+  'similaritySearch',
+  'pinecone.query',
+  'weaviate.query',
+  'qdrant.query',
+  'chroma.query',
+  'vectorStore.query',
+  'embeddingStore.search',
+];
+
+const CACHE_CLIENT_PATTERNS = [
+  'redis.get', 'redis.set', 'redis.del',
+  'memcached.get', 'memcached.set',
+  'cacheClient.get', 'cacheClient.set',
+  'cacheStore.get', 'cacheStore.set',
+  'kv.get', 'kv.set', 'kv.del',
+  'upstashRedis.get', 'upstashRedis.set',
+  'ioredis.get', 'ioredis.set',
+  'cache.get', 'cache.set', 'cache.del',
+];
+
+function matchesAnyPattern(callee: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => callee.includes(pattern));
 }
 
 export interface JsParseResult {
@@ -176,6 +247,7 @@ export function parseJsFile(
   const mcpCredentialVaults: MCPCredentialVault[] = [];
   const mcpResources: MCPResource[] = [];
   const mcpCacheEntries: MCPCacheEntry[] = [];
+  const mcpContextDetected = hasMcpContext(sourceCode);
 
   let ast: t.File;
   try {
@@ -204,8 +276,8 @@ export function parseJsFile(
         const fnName = node.declaration.id?.name ?? '';
         const loc = toLocation(node, relativePath);
 
-        // Detect MCP tool registration
-        if (fnName.toLowerCase().includes('tool') || fnName.toLowerCase().includes('handler')) {
+        // Detect MCP tool registration — only if file has MCP context
+        if (mcpContextDetected && (fnName.toLowerCase().includes('tool') || fnName.toLowerCase().includes('handler'))) {
           entrypoints.push({
             id: `entry-${relativePath}-${loc.line}`,
             type: 'mcp_tool_handler',
@@ -370,10 +442,8 @@ export function parseJsFile(
         });
       }
 
-      // Cache operations - server-side only (Redis, memcached)
-      if (callee.includes('redis.get') || callee.includes('redis.set') || callee.includes('redis.del') ||
-          callee.includes('memcached.get') || callee.includes('memcached.set') ||
-          callee.includes('cacheClient.get') || callee.includes('cacheClient.set')) {
+      // Cache operations - server-side only (Redis, memcached, KV, etc.)
+      if (matchesAnyPattern(callee, CACHE_CLIENT_PATTERNS)) {
         sinks.push({
           id: `sink-${relativePath}-${loc.line}`,
           kind: (callee.includes('set') ? 'cache_write' : 'cache_read') as SinkKind,
@@ -394,8 +464,8 @@ export function parseJsFile(
         });
       }
 
-      // Object storage (S3, Blob)
-      if (callee.includes('putObject') || callee.includes('getObject') || callee.includes('upload') || callee.includes('presign')) {
+      // Object storage (S3, Blob) — narrowed from bare 'upload' match
+      if (matchesAnyPattern(callee, OBJECT_STORAGE_PATTERNS)) {
         sinks.push({
           id: `sink-${relativePath}-${loc.line}`,
           kind: 'object_storage' as SinkKind,
@@ -419,17 +489,15 @@ export function parseJsFile(
         });
       }
 
-      // Vector search
-      if (callee.includes('vectorSearch') || callee.includes('similaritySearch') || callee.includes('query')) {
-        if (callee.includes('vector') || callee.includes('embedding') || callee.includes('similarity')) {
-          sinks.push({
-            id: `sink-${relativePath}-${loc.line}`,
-            kind: 'vector_search' as SinkKind,
-            api: callee,
-            argsVars: args,
-            location: loc,
-          });
-        }
+      // Vector search — narrowed from bare 'query' match
+      if (matchesAnyPattern(callee, VECTOR_SEARCH_PATTERNS)) {
+        sinks.push({
+          id: `sink-${relativePath}-${loc.line}`,
+          kind: 'vector_search' as SinkKind,
+          api: callee,
+          argsVars: args,
+          location: loc,
+        });
       }
 
       // Auth signals (built-in guards + user-configured auth helpers)
@@ -463,8 +531,8 @@ export function parseJsFile(
         });
       }
 
-      // MCP session creation
-      if (callee.includes('createSession') || callee.includes('sessionId')) {
+      // MCP session creation — only detect if file has MCP context
+      if (mcpContextDetected && matchesAnyPattern(callee, MCP_SESSION_PATTERNS)) {
         const code = sourceCode.split('\n').slice(loc.line - 1, loc.line + 3).join('\n');
         mcpSessions.push({
           id: `mcp-session-${relativePath}-${loc.line}`,
@@ -476,8 +544,8 @@ export function parseJsFile(
         });
       }
 
-      // MCP credential vault
-      if (callee.includes('getCredential') || callee.includes('getToken') || callee.includes('apiKey') || callee.includes('secret')) {
+      // MCP credential vault — only detect if file has MCP context, using precise patterns
+      if (mcpContextDetected && matchesAnyPattern(callee, MCP_CREDENTIAL_VAULT_PATTERNS)) {
         const code = sourceCode.split('\n').slice(loc.line - 1, loc.line + 3).join('\n');
         const tenantScoped = hasGuard(code, MCP_CREDENTIAL_VAULT_GUARDS);
         mcpCredentialVaults.push({
@@ -488,10 +556,8 @@ export function parseJsFile(
         });
       }
 
-      // MCP cache operations - server-side cache only
-      if (callee.includes('redis.get') || callee.includes('redis.set') ||
-          callee.includes('cacheClient.get') || callee.includes('cacheClient.set') ||
-          callee.includes('cacheStore.get') || callee.includes('cacheStore.set')) {
+      // MCP cache operations — only detect if file has MCP context
+      if (mcpContextDetected && matchesAnyPattern(callee, CACHE_CLIENT_PATTERNS)) {
         const code = sourceCode.split('\n').slice(loc.line - 1, loc.line + 3).join('\n');
         const hasTenantPrefix = hasGuard(code, MCP_CACHE_PREFIX_GUARDS);
         mcpCacheEntries.push({

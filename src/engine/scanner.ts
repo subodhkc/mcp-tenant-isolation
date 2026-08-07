@@ -136,10 +136,12 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
         }
 
         for (const model of findModelsWithoutTenantField(result.models)) {
+          // Skip models explicitly configured as global in .mtirc.json
+          if (config?.modelScopes?.global?.includes(model.name)) continue;
           parserFindings.push(buildFinding(
             'SCH-001',
             'Prisma model missing tenant field',
-            'HIGH',
+            'MEDIUM',
             `Model "${model.name}" has no tenant isolation field (organizationId, tenantId, etc.).`,
             buildEvidence(relPath, model.location.line, model.location.line, `model ${model.name} {`),
             ['tenantId', 'organizationId'],
@@ -149,7 +151,7 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
 
         for (const { model, index } of findIndexesWithoutTenantFirst(result.models)) {
           parserFindings.push(buildFinding(
-            'SCH-002',
+            'SCH-003',
             'Index missing tenant column as first field',
             'MEDIUM',
             `Index on "${model}" does not start with the tenant column. Queries may scan across tenants.`,
@@ -169,9 +171,9 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
 
         for (const table of findTablesWithoutRls(result.tables, result.rlsEnabledTables)) {
           parserFindings.push(buildFinding(
-            'SCH-003',
+            'SCH-004',
             'Table with tenant column missing RLS',
-            'CRITICAL',
+            'HIGH',
             `Table "${table.name}" has a tenant column but RLS is not enabled. Cross-tenant data access is possible.`,
             buildEvidence(relPath, table.location.line, table.location.line, `CREATE TABLE ${table.name}`),
             ['row_level_security', 'rls'],
@@ -181,9 +183,9 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
 
         for (const policy of findBypassedRlsPolicies(result.rlsPolicies)) {
           parserFindings.push(buildFinding(
-            'SCH-004',
+            'SCH-005',
             'RLS policy bypassed with USING(true) or WITH CHECK(true)',
-            'CRITICAL',
+            'HIGH',
             `RLS policy "${policy.policyName}" on table "${policy.tableName}" uses true bypass, allowing all rows.`,
             buildEvidence(relPath, policy.location.line, policy.location.line, `CREATE POLICY ${policy.policyName}`),
             ['row_level_security', 'rls'],
@@ -198,7 +200,7 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
             );
             if (!hasTenantIndex) {
               parserFindings.push(buildFinding(
-                'SCH-005',
+                'SCH-003',
                 'Missing tenant-first index on table',
                 'MEDIUM',
                 `Table "${table.name}" has a tenant column but no index starting with it. Query performance across tenants will degrade.`,
@@ -262,6 +264,16 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
     for (const f of findings) {
       if (nonProdPatterns.some((p) => f.evidence.file.includes(p))) {
         f.severity = 'INFO';
+      }
+    }
+  }
+
+  // 6c. Add contextual note to LOG-001 in webhook/cron routes (audit recommendation, not security risk)
+  const webhookCronPatterns = ['/api/stripe/webhook', '/api/webhooks/', '/api/nyc-webhooks', '/api/cron/'];
+  for (const f of findings) {
+    if (f.ruleId === 'LOG-001' && webhookCronPatterns.some(p => f.evidence.file.includes(p))) {
+      if (!f.description.includes('Note:')) {
+        f.description += ' Note: This route is authenticated by signature/secret, not tenant session. Adding tenantId to logs is recommended for audit completeness but not a security risk.';
       }
     }
   }

@@ -127,4 +127,70 @@ describe('False Positive Filter', () => {
     expect(filtered).toHaveLength(1);
     expect(filtered[0].evidence.file).toBe('src/api/users/route.ts');
   });
+
+  it('should filter out findings in demo-repos paths', () => {
+    const findings = [
+      makeFinding('demo-repos/test-app/src/api/users/route.ts'),
+      makeFinding('src/api/users/route.ts'),
+    ];
+    const filtered = filterFalsePositives(findings, emptyIR);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].evidence.file).toBe('src/api/users/route.ts');
+  });
+
+  it('should filter out findings in Old Files paths', () => {
+    const findings = [
+      makeFinding('Old Files/src/api/users/route.ts'),
+      makeFinding('src/api/users/route.ts'),
+    ];
+    const filtered = filterFalsePositives(findings, emptyIR);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].evidence.file).toBe('src/api/users/route.ts');
+  });
+
+  it('should filter out findings in scripts paths', () => {
+    const findings = [
+      makeFinding('src/scripts/migrate-data.ts'),
+      makeFinding('src/api/users/route.ts'),
+    ];
+    const filtered = filterFalsePositives(findings, emptyIR);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].evidence.file).toBe('src/api/users/route.ts');
+  });
+
+  it('should filter out findings in archive paths', () => {
+    const findings = [
+      makeFinding('src/archive/old-route.ts'),
+      makeFinding('src/api/users/route.ts'),
+    ];
+    const filtered = filterFalsePositives(findings, emptyIR);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].evidence.file).toBe('src/api/users/route.ts');
+  });
+
+  it('should filter out findings in e2e test paths', () => {
+    const findings = [
+      makeFinding('src/e2e/spec/api-test.ts'),
+      makeFinding('src/api/users/route.ts'),
+    ];
+    const filtered = filterFalsePositives(findings, emptyIR);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].evidence.file).toBe('src/api/users/route.ts');
+  });
+
+  it('should filter out findings in story files', () => {
+    const findings = [
+      makeFinding('src/components/Button.stories.tsx'),
+      makeFinding('src/api/users/route.ts'),
+    ];
+    const filtered = filterFalsePositives(findings, emptyIR);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].evidence.file).toBe('src/api/users/route.ts');
+  });
 });

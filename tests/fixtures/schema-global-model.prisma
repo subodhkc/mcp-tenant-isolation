@@ -1,0 +1,23 @@
+// Test fixture: Global model (no tenant field, marked as global scope)
+// Used with global-model-query.ts to verify DBQ rules skip global models
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Post {
+  id             String   @id @default(cuid())
+  title          String
+  content        String
+  published      Boolean  @default(false)
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
