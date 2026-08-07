@@ -298,7 +298,7 @@ mti scan ./src --format sarif --output results.sarif
 - Framework detection (Next.js, Express, Fastify)
 - Non-production path filtering
 
-### v1.1.0 (Planned)
+### v1.7.0 (Planned)
 - Python support (FastAPI, Django, Flask)
 - SQLAlchemy ORM analysis
 - Watch mode (mti scan --watch)

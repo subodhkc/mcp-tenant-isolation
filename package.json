@@ -70,7 +70,8 @@
     "SECURITY.md",
     "schemas",
     "action.yml",
-    "Dockerfile"
+    "Dockerfile",
+    "server.json"
   ],
   "dependencies": {
     "@babel/parser": "^7.24.0",
