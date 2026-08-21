@@ -59,8 +59,10 @@ jobs:
       - name: Self-scan
         shell: bash
         run: |
+          set +e
           node dist/cli/index.js scan --format sarif --output mti-results.sarif
           exit_code=$?
+          set -e
           if [ $exit_code -eq 2 ]; then
             echo "::error::Scanner error during self-scan"
             exit 1
