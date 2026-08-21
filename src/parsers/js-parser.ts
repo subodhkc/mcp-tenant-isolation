@@ -147,6 +147,7 @@ function isDbClient(callee: string): boolean {
 
 const MCP_CONTEXT_PATTERNS = [
   '@modelcontextprotocol/sdk',
+  '@modelcontextprotocol/server',
   'server.tool(',
   'mcpServer.tool(',
   'registerTool(',
@@ -221,6 +222,8 @@ function matchesAnyPattern(callee: string, patterns: string[]): boolean {
 export interface JsParseResult {
   ir: Partial<IR>;
   file: ParsedFile;
+  /** Present when parsing failed (catastrophic error or unrecoverable syntax). */
+  parseError?: string;
 }
 
 export function parseJsFile(
@@ -252,7 +255,7 @@ export function parseJsFile(
   let ast: t.File;
   try {
     ast = parse(sourceCode, PARSE_OPTIONS) as t.File;
-  } catch (_err) {
+  } catch (err) {
     return {
       ir: {},
       file: {
@@ -261,6 +264,7 @@ export function parseJsFile(
         lineCount,
         parseTimeMs: Date.now() - startTime,
       },
+      parseError: err instanceof Error ? err.message : String(err),
     };
   }
 

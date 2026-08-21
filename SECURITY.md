@@ -30,7 +30,8 @@ Response time: 48 hours for acknowledgment, 7 days for assessment.
 
 - `@babel/parser` — used for AST parsing, runs in Node.js process
 - `commander` — CLI framework
-- `@modelcontextprotocol/sdk` — MCP server transport
+- `@modelcontextprotocol/server` — MCP server transport (v2 SDK, stdio)
+- `zod` — schema validation for MCP tool input schemas
 - `fast-glob` — file discovery
 
 All dependencies are pinned in `package.json`. Run `npm audit` regularly.

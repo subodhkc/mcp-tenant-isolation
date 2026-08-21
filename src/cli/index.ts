@@ -177,29 +177,34 @@ program
   .command('suppress')
   .description('Add a suppression for a finding')
   .option('-p, --path <path>', 'project root path', process.cwd())
-  .option('--rule-id <id>', 'rule ID to suppress')
-  .option('--fingerprint <fp>', 'finding fingerprint to suppress')
-  .option('--file <file>', 'file path to suppress')
-  .option('--reason <reason>', 'suppression reason (required)')
-  .option('--approved-by <user>', 'approver (required)')
-  .option('--expires <date>', 'expiry date (ISO 8601)')
+  .option('--rule-id <id>', 'rule ID to suppress (required)')
+  .option('--fingerprint <fp>', 'finding fingerprint to suppress (required unless --permanent-exception)')
+  .option('--file <file>', 'file path to suppress (optional, scopes to a file)')
+  .option('--reason <reason>', 'suppression reason (required, min 10 chars)')
+  .option('--approved-by <user>', 'deprecated: use --documented-approver')
+  .option('--documented-approver <user>', 'documented approver identifier (required)')
+  .option('--expires <date>', 'expiry date (ISO 8601); required unless --permanent-exception')
   .option('--controls <controls>', 'comma-separated compensating controls (required)')
+  .option('--permanent-exception', 'documented permanent exception (no expiry; reason must justify)')
   .action(async (options) => {
     try {
-      if (!options.reason || !options.approvedBy || !options.controls) {
-        console.error('Required: --reason, --approved-by, --controls');
+      const approver = options.documentedApprover ?? options.approvedBy;
+      if (!options.reason || !approver || !options.controls) {
+        console.error('Required: --reason, --documented-approver, --controls');
         process.exitCode = EXIT_CODES.ERROR;
         return;
       }
 
-      const suppression = {
+      const suppression: SuppressionRule = {
         ruleId: options.ruleId,
         fingerprint: options.fingerprint,
         filePath: options.file,
         reason: options.reason,
-        approvedBy: options.approvedBy,
+        documentedApprover: approver,
         expires: options.expires,
         compensatingControls: options.controls.split(',').map((c: string) => c.trim()),
+        permanentException: options.permanentException === true,
+        fingerprintVersion: 2,
       };
 
       const errors = validateSuppression(suppression);
@@ -245,6 +250,7 @@ program
 
       const fingerprints: BaselineFingerprint[] = result.findings.map((f) => ({
         fingerprint: f.fingerprint,
+        fingerprintVersion: f.fingerprintVersion ?? 2,
         ruleId: f.ruleId,
         severity: f.severity,
         file: f.evidence.file,
@@ -270,17 +276,15 @@ program
 
 program
   .command('mcp')
-  .description('Start MCP server for AI agent integration')
-  .option('-p, --path <path>', 'project root path', process.cwd())
-  .option('-t, --transport <type>', 'transport type: stdio or sse', 'stdio')
-  .option('--port <number>', 'port for SSE transport', '3001')
+  .description('Start MCP server for AI agent integration (stdio transport)')
+  .option('-p, --path <path>', 'project root path (allowed root for the MCP server)', process.cwd())
+  .option('--allow-write-tools', 'enable the suppress_tenant_isolation_finding write tool (default: read-only)')
   .action(async (options) => {
     try {
       const projectRoot = resolve(options.path);
-      const transport = options.transport as 'stdio' | 'sse';
-      const port = parseInt(options.port, 10);
+      const allowWriteTools = options.allowWriteTools === true;
       const { startMcpServer } = await import('../mcp/server.js');
-      await startMcpServer(projectRoot, { transport, port });
+      await startMcpServer(projectRoot, { allowWriteTools });
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : String(err));
       process.exitCode = EXIT_CODES.ERROR;

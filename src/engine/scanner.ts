@@ -27,16 +27,23 @@ import type {
   SqlRlsPolicy,
   PrismaModelInfo,
   FlowGraph,
+  CompletenessState,
+  CoverageInfo,
+  ParseFailure,
+  RuleFailure,
 } from '../types.js';
 import { parseJsFile } from '../parsers/js-parser.js';
 import { parsePrismaSchema, findModelsWithoutTenantField, findIndexesWithoutTenantFirst } from '../parsers/prisma-parser.js';
 import { parseSqlMigration, findTablesWithoutRls, findBypassedRlsPolicies } from '../parsers/sql-parser.js';
-import { ALL_RULES } from '../rules/index.js';
+import { ALL_RULES, getRuleById } from '../rules/index.js';
 import { loadRulePacks } from './rule-pack-loader.js';
 import { buildFlowGraph } from './flow-graph.js';
 import { filterFalsePositives } from './fp-filter.js';
 import { applySuppressions } from './suppressions.js';
 import { buildFinding, buildEvidence } from '../rule-spec.js';
+import type { PathBoundary } from '../security/path-boundary.js';
+import { aggregateConcernFamilies } from './concern-families.js';
+import { computeRulepackDigest, buildScanReceipt } from './receipt.js';
 
 
 const DEFAULT_INCLUDE_PATTERNS = [
@@ -67,11 +74,13 @@ export interface ScanOptions {
   severityFilter?: Severity;
   rulesFilter?: string[];
   noSuppress?: boolean;
+  /** Optional boundary for rulepack path containment. */
+  boundary?: PathBoundary;
 }
 
 export async function scan(options: ScanOptions): Promise<ScanResult> {
   const startTime = Date.now();
-  const { projectRoot, config, severityFilter, rulesFilter, noSuppress } = options;
+  const { projectRoot, config, severityFilter, rulesFilter, noSuppress, boundary } = options;
 
   // 1. Discover files
   const includePatterns = config?.paths?.include ?? DEFAULT_INCLUDE_PATTERNS;
@@ -81,6 +90,10 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
     cwd: projectRoot,
     ignore: excludePatterns,
     absolute: true,
+    // When a boundary is provided (MCP mode), do not follow symlinks during
+    // discovery — a symlink inside root pointing outside would escape the boundary.
+    // CLI mode (no boundary) keeps default symlink-following behavior.
+    followSymbolicLinks: !boundary,
   });
 
   // 2. Parse files
@@ -91,6 +104,8 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   const allSqlRlsPolicies: SqlRlsPolicy[] = [];
   const allSqlRlsEnabledTables: string[] = [];
   const allPrismaModels: PrismaModelInfo[] = [];
+  const parseFailures: ParseFailure[] = [];
+  let unsupportedCount = 0;
 
   for (const file of files) {
     try {
@@ -105,6 +120,11 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
         });
         irParts.push(result.ir);
         parsedFiles.push(result.file);
+        // Check for parse errors signaled by the parser (Part 9 completeness)
+        if (result.parseError) {
+          const relPath = relative(projectRoot, file);
+          parseFailures.push({ file: relPath, error: result.parseError });
+        }
       } else if (ext === '.prisma') {
         const result = parsePrismaSchema(content, file, projectRoot);
         parsedFiles.push(result.file);
@@ -211,10 +231,16 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
             }
           }
         }
+      } else {
+        // File matched glob but has unsupported extension
+        unsupportedCount++;
       }
     } catch (err) {
-      // Skip unreadable files but log for debugging
-      console.warn(`[mti] Failed to parse ${relative(projectRoot, file)}: ${err instanceof Error ? err.message : String(err)}`);
+      // Parse failure — record for completeness accounting (Part 9-10)
+      const relPath = relative(projectRoot, file);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[mti] Failed to parse ${relPath}: ${errorMsg}`);
+      parseFailures.push({ file: relPath, error: errorMsg });
     }
   }
 
@@ -222,7 +248,7 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   const ir: IR = mergeIR(irParts, projectRoot, parsedFiles, allSqlTables, allSqlRlsPolicies, allSqlRlsEnabledTables, allPrismaModels);
 
   // 4. Load custom rule packs
-  const customRules = await loadRulePacks(projectRoot, config?.rulePacks);
+  const customRules = await loadRulePacks(projectRoot, config?.rulePacks, boundary);
   const allRules = [...ALL_RULES, ...customRules];
 
   // 5. Build flow graph (only if a rule requires it)
@@ -234,10 +260,13 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   const rulesToRun = filterRules(allRules, rulesFilter, config?.rules?.exclude)
     .sort((a, b) => a.executionOrder - b.executionOrder);
   let rulesTriggered = 0;
+  let rulesEvaluated = 0;
+  const ruleFailures: RuleFailure[] = [];
 
   for (const rule of rulesToRun) {
     try {
       const ruleFindings = rule.evaluate(ir, graph);
+      rulesEvaluated++;
       if (ruleFindings.length > 0) {
         rulesTriggered++;
         // Apply severity override from config
@@ -250,8 +279,10 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
         findings.push(...ruleFindings);
       }
     } catch (err) {
-      // Rule evaluation error - skip rule but log for debugging
-      console.warn(`[mti] Rule ${rule.id} evaluation error: ${err instanceof Error ? err.message : String(err)}`);
+      // Rule evaluation failure — record for completeness accounting (Part 9-11)
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[mti] Rule ${rule.id} evaluation error: ${errorMsg}`);
+      ruleFailures.push({ ruleId: rule.id, error: errorMsg });
     }
   }
 
@@ -279,21 +310,73 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   }
 
   // 7. Apply baseline (mark pre-existing findings)
-  const baselinePath = config?.baseline
-    ? join(projectRoot, config.baseline)
-    : join(projectRoot, '.mti-baseline.json');
-  const baselineFingerprints = loadBaselineFingerprints(baselinePath);
-  if (baselineFingerprints.size > 0) {
+  // Resolve baseline path through the boundary if provided (Part 3 containment).
+  let baselinePath: string;
+  if (boundary) {
+    const baselineRelative = config?.baseline ?? '.mti-baseline.json';
+    try {
+      baselinePath = await boundary.resolve(baselineRelative, {
+        resolveSymlinks: false,
+        allowMissing: true,
+      });
+    } catch (err) {
+      console.warn(
+        `[mti] Baseline path rejected by boundary: ${err instanceof Error ? err.message : String(err)}`
+      );
+      baselinePath = '';
+    }
+  } else {
+    baselinePath = config?.baseline
+      ? join(projectRoot, config.baseline)
+      : join(projectRoot, '.mti-baseline.json');
+  }
+  const baselineFingerprints = baselinePath
+    ? loadBaselineFingerprints(baselinePath)
+    : new Set<string>();
+  // hasBaseline = baseline file exists (even if empty — an empty baseline means
+  // "all current findings are NEW"). NOT_VERIFIABLE only when no baseline file exists.
+  const hasBaseline = baselinePath !== '' && existsSync(baselinePath);
+  const currentFingerprints = new Set(findings.map((f) => f.fingerprint));
+
+  if (hasBaseline) {
     for (const f of findings) {
       if (baselineFingerprints.has(f.fingerprint)) {
         f.suppressionStatus = 'baseline';
+        f.proofOfFix = 'STILL_PRESENT';
+      } else {
+        f.proofOfFix = 'NEW';
       }
+    }
+    // Findings that were in baseline but are no longer present → RESOLVED_CONFIRMED
+    // These are not in the current findings array, but we record the count for reporting.
+    // (Proof-of-fix fails closed: if no baseline exists, all findings are NOT_VERIFIABLE.)
+  } else {
+    // No baseline → proof-of-fix cannot be determined
+    for (const f of findings) {
+      f.proofOfFix = 'NOT_VERIFIABLE';
     }
   }
 
   // 8. Apply suppressions
+  // Resolve suppressions path through the boundary if provided (Part 3 containment).
   if (!noSuppress) {
-    findings = applySuppressions(findings, projectRoot, config?.suppressions);
+    if (boundary) {
+      const suppressionsRelative = config?.suppressions ?? '.mti-suppressions.json';
+      try {
+        const resolvedSuppressionsPath = await boundary.resolve(suppressionsRelative, {
+          resolveSymlinks: false,
+          allowMissing: true,
+        });
+        findings = applySuppressions(findings, projectRoot, resolvedSuppressionsPath);
+      } catch (err) {
+        console.warn(
+          `[mti] Suppressions path rejected by boundary: ${err instanceof Error ? err.message : String(err)}`
+        );
+        // Skip suppressions if path is outside root — do not fall back to unsafe path.
+      }
+    } else {
+      findings = applySuppressions(findings, projectRoot, config?.suppressions);
+    }
   }
 
   // 8. Apply severity filter
@@ -302,13 +385,103 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   }
 
   // 9. Build stats
-  const stats = buildStats(findings, parsedFiles.length, rulesToRun.length, rulesTriggered, allRules);
+  const stats = buildStats(findings, parsedFiles.length, rulesEvaluated, rulesTriggered, allRules);
+
+  // 10. Build coverage info (Part 10-11)
+  const coverage: CoverageInfo = {
+    filesDiscovered: files.length,
+    filesParsed: parsedFiles.length,
+    parseFailures: parseFailures.length,
+    parseFailureDetails: parseFailures,
+    excludedPaths: 0, // Glob exclusions are not directly countable; tracked as 0
+    unsupportedPaths: unsupportedCount,
+    rulesAvailable: allRules.length,
+    rulesSelected: rulesToRun.length,
+    rulesEvaluated,
+    rulesFailed: ruleFailures.length,
+    ruleFailureDetails: ruleFailures,
+    rulesTriggered,
+  };
+
+  // 11. Compute completeness (Part 9)
+  const completenessReasons: string[] = [];
+  const limitations: string[] = [];
+
+  if (parseFailures.length > 0) {
+    completenessReasons.push(
+      `${parseFailures.length} file(s) failed to parse: ${parseFailures.slice(0, 5).map(f => f.file).join(', ')}${parseFailures.length > 5 ? '...' : ''}`
+    );
+  }
+  if (ruleFailures.length > 0) {
+    completenessReasons.push(
+      `${ruleFailures.length} rule(s) failed during evaluation: ${ruleFailures.map(r => r.ruleId).join(', ')}`
+    );
+  }
+  if (unsupportedCount > 0) {
+    limitations.push(
+      `${unsupportedCount} file(s) with unsupported extensions were discovered but not parsed (supported: .ts, .tsx, .js, .jsx, .prisma, .sql)`
+    );
+  }
+  // Proof-of-fix summary (Part 16)
+  if (hasBaseline) {
+    const stillPresent = findings.filter(f => f.proofOfFix === 'STILL_PRESENT').length;
+    const newFindings = findings.filter(f => f.proofOfFix === 'NEW').length;
+    const resolved = [...baselineFingerprints].filter(fp => !currentFingerprints.has(fp)).length;
+    limitations.push(
+      `Proof-of-fix: ${stillPresent} still present, ${newFindings} new, ${resolved} resolved confirmed (relative to baseline).`
+    );
+  } else {
+    limitations.push(
+      'Proof-of-fix: NOT_VERIFIABLE (no baseline file found). Run "mti baseline" to establish a baseline for future comparison.'
+    );
+  }
+  if (needsFlowGraph) {
+    limitations.push(
+      'Flow analysis is intra-procedural; inter-procedural data flow is not traced across function boundaries.'
+    );
+  } else {
+    limitations.push(
+      'Flow analysis was not required by any selected rule; source/sink paths were not computed.'
+    );
+  }
+  limitations.push(
+    'Static analysis only; runtime behavior, dynamic tenant isolation, and database-level enforcement are not verified.'
+  );
+
+  let completeness: CompletenessState;
+  if (parseFailures.length === 0 && ruleFailures.length === 0) {
+    completeness = 'COMPLETE';
+  } else {
+    completeness = 'PARTIAL';
+  }
+
+  // 12. Aggregate concern families (Part 12)
+  const concernFamilies = aggregateConcernFamilies(findings, (ruleId) => {
+    const rule = getRuleById(ruleId);
+    return rule?.category;
+  });
+
+  // 13. Compute rulepack digest and build scan receipt (Parts 17-18, 22)
+  const rulepackDigest = computeRulepackDigest(
+    allRules.map((r) => ({ id: r.id, version: r.version, executionOrder: r.executionOrder }))
+  );
+  const receipt = buildScanReceipt(
+    { findings, ir, stats, durationMs: Date.now() - startTime, completeness, completenessReasons, coverage, limitations },
+    projectRoot,
+    rulepackDigest
+  );
 
   return {
     findings,
     ir,
     stats,
     durationMs: Date.now() - startTime,
+    completeness,
+    completenessReasons,
+    coverage,
+    limitations,
+    concernFamilies,
+    receipt,
   };
 }
 

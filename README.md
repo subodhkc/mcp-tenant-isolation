@@ -1,8 +1,6 @@
 # mcp-tenant-isolation
 
-Static analysis scanner for multi-tenant SaaS and MCP server code. Catches cross-tenant data leakage before it reaches production.
-
-57 deterministic rules covering tenant isolation, database query filters, IDOR, cache key scoping, RLS, schema gaps, and MCP-specific risks (tool visibility, cache prefix, session binding, credential vault). Works with Prisma, Drizzle, raw SQL, Next.js, Express, and Fastify. Includes an MCP server for Claude Desktop and Cursor integration.
+Static analysis scanner for multi-tenant SaaS and MCP server code. 57 deterministic rules that catch cross-tenant data leakage before it reaches production.
 
 [![npm version](https://img.shields.io/npm/v/mcp-tenant-isolation.svg)](https://www.npmjs.com/package/mcp-tenant-isolation)
 [![npm downloads](https://img.shields.io/npm/dm/mcp-tenant-isolation.svg)](https://www.npmjs.com/package/mcp-tenant-isolation)
@@ -10,18 +8,28 @@ Static analysis scanner for multi-tenant SaaS and MCP server code. Catches cross
 [![Docker](https://img.shields.io/docker/v/subodhkc/mcp-tenant-isolation?label=docker)](https://hub.docker.com/r/subodhkc/mcp-tenant-isolation)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Who is this for
+## What it does
 
-- **SaaS builders** shipping multi-tenant apps who need to catch cross-tenant data leakage
+If you build multi-tenant software, every query, every cache key, every file access, every API response needs to be scoped to the right tenant. Miss one, and Tenant A sees Tenant B's data. That's not a bug you want to find in production.
+
+This scanner reads your source code and checks whether tenant isolation guards are present where they need to be. It covers 57 patterns across database queries, API routes, cache keys, file storage, schema design, logging, and MCP server architecture. It works with TypeScript, JavaScript, Prisma, Drizzle, raw SQL, Next.js, Express, and Fastify.
+
+The scanner also runs as an MCP server, so you can plug it into Claude Desktop, Cursor, or any MCP-compatible agent and have your AI assistant scan code on demand.
+
+## Who uses this
+
+- **SaaS engineering teams** who need to catch tenant isolation gaps before code ships
 - **MCP server developers** building tools that handle tenant-scoped data
-- **Security teams** who need tenant isolation as part of CI/CD
-- **AI agent developers** who want their agents to scan code on demand
+- **Security teams** who want tenant isolation checks in CI/CD
+- **AI agent developers** who want their agents to scan code for cross-tenant risks
 
-## Why
+## Why this exists
 
-General-purpose security scanners (Snyk, Semgrep, CodeQL) do not understand tenant isolation patterns or MCP server architecture. Cross-tenant data leakage goes undetected. This tool fills that gap with 57 purpose-built deterministic rules.
+General-purpose security scanners are not purpose-built for tenant isolation patterns. They catch SQL injection and XSS. They do not check whether your `findMany` query includes an `organizationId` filter. They do not check whether your MCP tool handler scopes tool visibility by tenant. They do not check whether your cache key includes a tenant prefix.
 
-Every rule is deterministic and reproducible. No machine learning, no false guesses. Each rule checks for specific code patterns, guard presence, and data flow paths. You get the same results every run.
+This scanner does exactly that. 57 rules, each checking for a specific tenant isolation pattern, each producing a finding with the rule ID, file, line, missing guard, and a remediation hint.
+
+Every rule is deterministic. Given the same source code, the scanner produces the same findings. No machine learning, no probabilistic scoring. Static analysis has inherent limitations though. It cannot verify runtime behavior, database-level enforcement, or dynamic tenant isolation. The scan output includes a `limitations` field that lists what was and was not checked for each run.
 
 ## Install
 
@@ -35,7 +43,9 @@ npx mcp-tenant-isolation scan ./src
 docker run --rm -v $(pwd):/code subodhkc/mcp-tenant-isolation scan /code/src
 ```
 
-## Quick Start
+Requires Node.js 22 or later.
+
+## Quick start
 
 ```bash
 mti scan ./src
@@ -52,23 +62,23 @@ mti init
 
 ## Rules
 
-### 42 General Multi-Tenant Rules
+### 42 general multi-tenant rules
 
-| Prefix | Category | Count | Severity | Description |
-|--------|----------|-------|----------|-------------|
-| TCM | Tenant Context Management | 6 | Critical | Tenant ID from sessions, not client input. Context propagation across async boundaries. |
-| DBQ | Database Query Isolation | 10 | Critical | Every query touching tenant-scoped data must include a tenant filter. |
-| IDOR | IDOR Prevention | 5 | Critical | ID-based lookups must verify tenant ownership. |
-| CSI | Cache and Session Isolation | 4 | High | Cache keys and session data must be tenant-scoped. |
+| Prefix | Category | Count | Severity | What it checks |
+|--------|----------|-------|----------|----------------|
+| TCM | Tenant Context Management | 6 | Critical | Tenant ID comes from session, not client input. Context propagation across async boundaries. |
+| DBQ | Database Query Isolation | 10 | Critical | Every query touching tenant-scoped data includes a tenant filter. Prisma, Drizzle, raw SQL. |
+| IDOR | IDOR Prevention | 5 | Critical | ID-based lookups verify tenant ownership before returning data. |
+| CSI | Cache and Session Isolation | 4 | High | Cache keys and session data are tenant-scoped. |
 | API | API Security | 3 | High | Tenant-aware rate limiting and response scoping. |
-| FSI | File Storage Isolation | 4 | High | S3, Blob, and filesystem access must be tenant-scoped. |
-| LOG | Logging and Audit | 4 | Medium | Audit logs must include tenant context. |
-| SCH | Schema and Migration | 6 | High | Prisma models and SQL migrations must include tenant columns. |
+| FSI | File Storage Isolation | 4 | High | S3, Blob, and filesystem access is tenant-scoped. |
+| LOG | Logging and Audit | 4 | Medium | Audit logs include tenant context. |
+| SCH | Schema and Migration | 6 | High | Prisma models and SQL migrations include tenant columns and indexes. |
 
-### 15 MCP-Specific Rules
+### 15 MCP-specific rules
 
-| ID | Title | Severity | Description |
-|----|-------|----------|-------------|
+| ID | Title | Severity | What it checks |
+|----|-------|----------|----------------|
 | MCP-001 | Tool Visibility Scoping | Critical | Tool handler has no tenant-based allow/deny filter. |
 | MCP-002 | Cache Key Tenant Prefix | Critical | Tool results cached without tenant prefix. |
 | MCP-003 | Session Binding to User+Tenant | Critical | Session ID used as sole authorization. |
@@ -85,20 +95,37 @@ mti init
 | MCP-014 | Cross-Tenant Artifact Leakage | High | Artifact storage without tenant prefix. |
 | MCP-015 | Dynamic Tool Namespace | Medium | Tools registered without tenant namespace. |
 
+MCP rules are mapped to the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) (2025). See [docs/OWASP-MAPPING.md](docs/OWASP-MAPPING.md) for the full mapping. The mappings are advisory, for triage and reporting. This scanner does not certify OWASP compliance.
+
 ## Architecture
 
-The scanner pipeline works in six stages:
+The scanner pipeline runs in six stages:
 
-1. **Parsers** - Babel AST for TS/JS, Prisma schema parser, SQL migration parser, MCP SDK import detection
-2. **IR and Flow Graph** - Intermediate representation capturing sources, sinks, guards, routes, MCP tool definitions
-3. **Rule Engine** - 57 deterministic rules evaluated against the IR. Each rule defines sources, sinks, required guards
-4. **False Positive Filter** - Test file detection, confidence scoring, pattern refinement
-5. **Reporters** - Terminal (with verdict), JSON, SARIF 2.1.0, AI-friendly JSON (with remediation hints), Markdown (shareable report)
-6. **CLI and MCP Server** - `mti` CLI with scan/init/rules/suppress/baseline/mcp commands. MCP server exposes 4 tools
+1. **Parsers** — Babel AST for TypeScript/JavaScript, Prisma schema parser, SQL migration parser, MCP SDK import detection
+2. **IR and Flow Graph** — Intermediate representation capturing sources, sinks, guards, routes, MCP tool definitions
+3. **Rule Engine** — 57 deterministic rules evaluated against the IR. Each rule defines sources, sinks, and required guards
+4. **False Positive Filter** — Test file detection, confidence scoring, pattern refinement
+5. **Reporters** — Terminal, JSON, SARIF 2.1.0, AI-friendly JSON with remediation hints, Markdown
+6. **CLI and MCP Server** — `mti` CLI with scan/init/rules/suppress/baseline/mcp commands. MCP server exposes 4 tools
 
-## MCP Server
+### Structured output
 
-The package includes an MCP server for AI agent integration. It runs locally via stdio transport (no hosting required):
+Scan results include structured metadata beyond just findings:
+
+- **Completeness** — COMPLETE, PARTIAL, or ERROR. If files fail to parse or rules fail to evaluate, completeness drops to PARTIAL and the reasons are listed.
+- **Coverage** — Files discovered, parsed, failed to parse. Rules available, selected, evaluated, failed, triggered. Unsupported file types counted.
+- **Concern families** — Findings grouped into 8 concern families (Tenant Context, Data Isolation, Cache and Session, MCP Security, Secrets and Credentials, Vector and Storage, API and Access, Audit and Logging) for triage.
+- **Limitations** — What the scan could and could not verify. Always includes static analysis limitation. Includes flow analysis scope and proof-of-fix status.
+- **Scan receipt** — Provenance metadata with engine version, rulepack digest, timestamp, and a SHA-256 receipt hash for tamper detection.
+- **Proof-of-fix** — Each finding is tagged as STILL_PRESENT, NEW, or NOT_VERIFIABLE relative to a baseline file. Run `mti baseline` to establish a baseline.
+
+### Fingerprints
+
+Findings use v2 semantic fingerprints that are stable under line movement and formatting changes. The fingerprint is derived from the rule ID, file path, normalized code snippet, and sorted missing guards. It does not include the line number. This means if you move code around without changing its semantics, the fingerprint stays the same and baseline tracking remains accurate.
+
+## MCP server
+
+The package includes an MCP server for AI agent integration. It runs locally via stdio transport. No hosting, no network exposure.
 
 ```json
 {
@@ -113,16 +140,20 @@ The package includes an MCP server for AI agent integration. It runs locally via
 
 Add this to your Claude Desktop, Cursor, or other MCP client config to let your AI agent scan code for tenant isolation issues on demand.
 
-### MCP Tools
+### MCP tools
 
-| Tool | Description |
-|------|-------------|
-| `scan_tenant_isolation` | Scan a file path or inline code. Returns structured findings. |
-| `list_tenant_isolation_rules` | Returns all 57 rules with metadata. Filterable by category. |
-| `explain_tenant_isolation_rule` | Returns rule details, OWASP mapping, CWE IDs, fix suggestions. |
-| `suppress_tenant_isolation_finding` | Add a suppression with reason and expiration. |
+| Tool | Description | Write? |
+|------|-------------|--------|
+| `scan_tenant_isolation` | Scan a project path. Returns structured findings with completeness, coverage, concern families, and receipt. | No |
+| `list_tenant_isolation_rules` | Returns all 57 rules with metadata. Filterable by category. | No |
+| `explain_tenant_isolation_rule` | Returns rule details, OWASP mapping, CWE IDs, fix suggestions. | No |
+| `suppress_tenant_isolation_finding` | Add a suppression with reason, approver, controls, and expiry. | Yes (opt-in) |
 
-## CI/CD Integration
+The suppression tool is hidden by default. It only appears when the server is started with `--allow-write-tools`. This is a security boundary: read-only by default, write operations require explicit opt-in.
+
+All filesystem operations during MCP scans are constrained to the project root configured at server startup. Traversal attacks (`../`), absolute paths outside root, UNC paths, and symlink escapes are rejected. See [SECURITY.md](SECURITY.md) for details.
+
+## CI/CD integration
 
 ### Option 1: Pre-built GitHub Action (easiest)
 
@@ -139,7 +170,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: subodhkc/mcp-tenant-isolation@v1
+      - uses: subodhkc/mcp-tenant-isolation@v2
         with:
           path: ./src
           severity: HIGH
@@ -151,7 +182,6 @@ Runs the scan, uploads SARIF to GitHub Code Scanning, generates a Markdown repor
 ### Option 2: Manual npx
 
 ```yaml
-# .github/workflows/tenant-isolation.yml
 name: Tenant Isolation Scan
 on: [push, pull_request]
 jobs:
@@ -164,14 +194,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npx mcp-tenant-isolation scan ./src --format sarif --output results.sarif
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
 ```
 
-### Exit Codes
+### Exit codes
 
 | Code | Meaning |
 |------|---------|
@@ -179,7 +209,7 @@ jobs:
 | 1 | Findings found |
 | 2 | Error (config invalid, parse failure, etc.) |
 
-### GitHub Code Scanning Integration
+### GitHub Code Scanning integration
 
 When you upload SARIF output using `github/codeql-action/upload-sarif@v3`, findings appear in your repository's **Security > Code scanning alerts** tab. This works with both free and Advanced Security-enabled repos.
 
@@ -216,7 +246,7 @@ Create `.mtirc.json` in your project root:
 }
 ```
 
-### Advanced Configuration
+### Advanced configuration
 
 ```json
 {
@@ -251,9 +281,31 @@ Create `.mtirc.json` in your project root:
 | `modelScopes` | Override model scope classification (userScoped, global, tenantScoped) |
 | `rulePacks` | Paths to custom rule pack JSON files |
 
-## Report Formats
+### Custom rule packs
 
-| Format | Flag | Use Case |
+You can extend the scanner with custom rules via JSON rule packs. Custom rules are validated at load time:
+
+- Rule IDs must match `PREFIX-NNN` format (e.g., `CUST-001`)
+- Rule IDs cannot collide with built-in rules
+- Severity must be one of INFO, LOW, MEDIUM, HIGH, CRITICAL
+- Maximum 50 custom rules across all rulepacks
+- Rulepack paths are constrained to the project root (MCP mode)
+
+Invalid custom rules are rejected with warnings. The scan continues with built-in rules.
+
+### Suppressions
+
+Suppressions require a concrete finding fingerprint, a rule ID, a documented approver identifier, a reason, compensating controls, and an expiry date. Rule-wide suppressions (no fingerprint) are only permitted as documented permanent exceptions.
+
+The `documentedApprover` field records who approved the suppression. It does not represent independent human verification. It is a recorded attribution string, not a claim of external review.
+
+### Baselines
+
+Run `mti baseline` to snapshot current findings. Future scans compare against the baseline and tag each finding as STILL_PRESENT, NEW, or NOT_VERIFIABLE (if no baseline exists). This gives you proof-of-fix tracking over time.
+
+## Report formats
+
+| Format | Flag | Use case |
 |--------|------|----------|
 | Terminal | `--format terminal` (default) | Developer console with pass/fail verdict |
 | JSON | `--format json` | Programmatic consumption, piping to other tools |
@@ -269,53 +321,57 @@ mti scan ./src --format markdown --output TENANT-ISOLATION-REPORT.md
 mti scan ./src --format sarif --output results.sarif
 ```
 
-## Tech Stack
+## Tech stack
 
 - AST Parsing: @babel/parser (TypeScript, JSX), Prisma schema parser, SQL migration parser
 - Rule Engine: RuleSpec declarative pattern with guard detection and evidence building
 - CLI: Commander
-- MCP: @modelcontextprotocol/sdk (stdio transport)
-- Output: Terminal (with verdict), JSON, SARIF 2.1.0, AI JSON (with remediation), Markdown
-- Testing: Vitest
+- MCP: @modelcontextprotocol/server v2 (stdio transport, Zod schemas, structured output)
+- Output: Terminal, JSON, SARIF 2.1.0, AI JSON, Markdown
+- Testing: Vitest (192 tests, cross-platform CI on Ubuntu, Windows, macOS)
 
 ## Roadmap
 
-### v1.6.2 (Current)
+### v2.0.0 (Current)
 - 57 rules (42 general + 15 MCP-specific)
 - TypeScript and JavaScript support
 - Prisma schema analysis
 - SQL migration analysis (RLS, tenant columns, indexes)
-- CLI (mti) with terminal, JSON, SARIF, AI JSON, Markdown output
-- Pass/fail verdict in terminal and Markdown reports
-- Remediation hints for all 57 rules
-- MCP server for AI agent integration
-- Suppression policy with expiration
-- Baseline tracking with diff
+- CLI with terminal, JSON, SARIF, AI JSON, Markdown output
+- MCP server v2 SDK (stdio transport, Zod schemas, structured output)
+- Structured MCP output with completeness, coverage, and concern families
+- Scan Receipt with rulepack digest and tamper-detection hash
+- Evidence Envelope for verifiable scan artifacts
+- Stable v2 semantic fingerprints (line-movement resistant)
+- OWASP MCP Top 10 mapping (official 2025 categories)
+- Path boundary enforcement (traversal, symlink, UNC, Windows 8.3)
+- Write-tool gating (read-only by default, suppression opt-in)
+- Suppression policy with expiration and documented approver
+- Baseline tracking with proof-of-fix states
 - Severity override in .mtirc.json
-- Custom rule packs (JSON)
+- Custom rule packs with validation
 - Configurable auth helpers and tenant guards
 - Model scope classification with config overrides
 - Framework detection (Next.js, Express, Fastify)
-- Non-production path filtering
+- Cross-platform CI matrix (Node 22/24, Ubuntu/Windows/macOS)
 
-### v1.7.0 (Planned)
+### Future
 - Python support (FastAPI, Django, Flask)
 - SQLAlchemy ORM analysis
 - Watch mode (mti scan --watch)
 - VS Code extension
-
-### v2.0.0 (Future)
 - Runtime two-tenant adversarial test harness
 - Go and Ruby language support
 - Incremental scanning with AST cache
 
 ## Links
 
-- [Landing Page](https://www.haiec.com/mcp-tenant-isolation)
+- [Landing page](https://www.haiec.com/mcp-tenant-isolation)
 - [GitHub](https://github.com/subodhkc/mcp-tenant-isolation)
 - [npm](https://www.npmjs.com/package/mcp-tenant-isolation)
-- [HAIEC](https://www.haiec.com)
-- [Built by Subodh Kc](https://subodhkc.com)
+- [Docker Hub](https://hub.docker.com/r/subodhkc/mcp-tenant-isolation)
+- [HAIEC](https://www.haiec.com) — AI security validation and audit-evidence platform
+- [Subodh Kc](https://subodhkc.com) — builder
 
 ## License
 

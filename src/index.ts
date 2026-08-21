@@ -11,7 +11,7 @@ export { filterFalsePositives } from './engine/fp-filter.js';
 export { applySuppressions, validateSuppression } from './engine/suppressions.js';
 export { jsonReporter, sarifReporter, terminalReporter, aiJsonReporter, markdownReporter } from './reporters/index.js';
 export { ALL_RULES, GENERAL_RULES, MCP_RULES, RULE_COUNT, RULE_ENGINE_VERSION, getRuleById, getRulesByCategory, getRuleCategories } from './rules/index.js';
-export { createRule, buildFinding, buildEvidence, generateFingerprint } from './rule-spec.js';
+export { createRule, buildFinding, buildEvidence, generateFingerprint, generateFingerprintV2, migrateFingerprintV1ToV2 } from './rule-spec.js';
 export type { RuleSpec, CreateRuleOptions, ComplianceMapping } from './rule-spec.js';
 export {
   TENANT_ISOLATION_GUARDS,
@@ -63,3 +63,5 @@ export { parseJsFile } from './parsers/js-parser.js';
 export { parsePrismaSchema, findModelsWithoutTenantField, findIndexesWithoutTenantFirst } from './parsers/prisma-parser.js';
 export { parseSqlMigration, findTablesWithoutRls, findBypassedRlsPolicies } from './parsers/sql-parser.js';
 export { startMcpServer } from './mcp/server.js';
+export { aggregateConcernFamilies, getConcernFamily } from './engine/concern-families.js';
+export { computeRulepackDigest, buildScanReceipt, buildEvidenceEnvelope, computeVerdict } from './engine/receipt.js';

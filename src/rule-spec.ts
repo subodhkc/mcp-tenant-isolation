@@ -119,7 +119,7 @@ export function buildFinding(
   missingGuards: string[],
   presentGuards: string[]
 ): Finding {
-  const fingerprint = generateFingerprint(ruleId, evidence.file, evidence.lineStart);
+  const fingerprint = generateFingerprintV2(ruleId, evidence.file, evidence.codeSnippet, missingGuards);
   return {
     ruleId,
     title,
@@ -130,10 +130,17 @@ export function buildFinding(
     missingGuards,
     presentGuards,
     fingerprint,
+    fingerprintVersion: 2,
   };
 }
 
 
+/**
+ * v1 fingerprint (legacy, line-dependent).
+ * Identity: ruleId:file:lineStart
+ * NOT stable under line movement or formatting changes.
+ * Retained for migration compatibility.
+ */
 export function generateFingerprint(
   ruleId: string,
   file: string,
@@ -143,4 +150,56 @@ export function generateFingerprint(
     .update(`${ruleId}:${file}:${line}`)
     .digest('hex')
     .substring(0, 16);
+}
+
+/**
+ * v2 fingerprint (semantic, stable under line movement).
+ * Identity: ruleId:file:normalizedCodeSnippet:sortedMissingGuards
+ * Stable under:
+ * - Line movement (line number is metadata, not identity)
+ * - Whitespace/formatting changes (code snippet is normalized)
+ * - Guard ordering (missing guards are sorted)
+ * NOT stable under:
+ * - File rename (file path is part of identity — intentional)
+ * - Rule ID change (rule ID is part of identity — intentional)
+ * - Semantic code change (code snippet changes — intentional)
+ */
+export function generateFingerprintV2(
+  ruleId: string,
+  file: string,
+  codeSnippet: string,
+  missingGuards: string[]
+): string {
+  // Normalize code snippet: remove all whitespace (semantic identity ignores formatting),
+  // lowercase for case-insensitive stability
+  const normalizedSnippet = codeSnippet
+    .replace(/\s+/g, '')
+    .toLowerCase();
+  const sortedGuards = [...missingGuards].sort().join(',');
+  return createHash('sha256')
+    .update(`v2:${ruleId}:${file}:${normalizedSnippet}:${sortedGuards}`)
+    .digest('hex')
+    .substring(0, 16);
+}
+
+/**
+ * Migrate a v1 fingerprint to v2 if possible.
+ * Returns the v2 fingerprint if the original finding details are available,
+ * otherwise returns the v1 fingerprint unchanged (cannot migrate without details).
+ */
+export function migrateFingerprintV1ToV2(
+  v1Fingerprint: string,
+  ruleId: string,
+  file: string,
+  line: number,
+  codeSnippet: string,
+  missingGuards: string[]
+): string {
+  // Verify the v1 fingerprint matches what we'd generate
+  const expectedV1 = generateFingerprint(ruleId, file, line);
+  if (v1Fingerprint !== expectedV1) {
+    // Can't verify — return v1 as-is (migration fails closed)
+    return v1Fingerprint;
+  }
+  return generateFingerprintV2(ruleId, file, codeSnippet, missingGuards);
 }

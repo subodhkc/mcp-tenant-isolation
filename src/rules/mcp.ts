@@ -43,7 +43,7 @@ const MCP_001 = createRule({
     'MCP tool handler does not implement tenant-based tool visibility scoping. All tenants can see all tools.',
   severity: 'CRITICAL',
   requiredGuards: [...MCP_TOOL_VISIBILITY_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-01',
+  owaspMcpRef: 'MCP09:2025',
   cweIds: ['CWE-639'],
   executionOrder: 100,
   evaluate: (ir): Finding[] => {
@@ -77,7 +77,7 @@ const MCP_002 = createRule({
     'MCP tool results are cached without a tenant prefix in the cache key. Cross-tenant cache poisoning possible.',
   severity: 'CRITICAL',
   requiredGuards: [...MCP_CACHE_PREFIX_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-02',
+  owaspMcpRef: 'MCP10:2025',
   cweIds: ['CWE-639'],
   executionOrder: 101,
   evaluate: (ir): Finding[] => {
@@ -111,7 +111,7 @@ const MCP_003 = createRule({
     'MCP session is not bound to both user and tenant. Session ID alone is used for authorization.',
   severity: 'CRITICAL',
   requiredGuards: [...MCP_SESSION_BINDING_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-03',
+  owaspMcpRef: 'MCP01:2025',
   cweIds: ['CWE-639', 'CWE-384'],
   executionOrder: 102,
   evaluate: (ir): Finding[] => {
@@ -145,7 +145,7 @@ const MCP_004 = createRule({
     'MCP server forwards the original OAuth token to downstream APIs instead of performing token exchange per RFC 8693.',
   severity: 'HIGH',
   requiredGuards: ['tokenExchange', 'rfc8693', 'exchangedToken', 'downstreamToken'],
-  owaspMcpRef: 'OWASP MCP-SEC-04',
+  owaspMcpRef: 'MCP07:2025',
   cweIds: ['CWE-287'],
   executionOrder: 103,
   evaluate: (ir): Finding[] => {
@@ -179,7 +179,7 @@ const MCP_005 = createRule({
     'MCP tool handler does not implement per-tenant rate limiting. Single tenant can exhaust shared quota.',
   severity: 'MEDIUM',
   requiredGuards: [...MCP_RATE_LIMIT_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-05',
+  owaspMcpRef: 'MCP02:2025',
   cweIds: ['CWE-770'],
   executionOrder: 104,
   evaluate: (ir): Finding[] => {
@@ -217,7 +217,7 @@ const MCP_006 = createRule({
     'MCP server uses a shared vector store without tenant-specific namespaces or partitions. Cross-tenant retrieval possible.',
   severity: 'HIGH',
   requiredGuards: [...MCP_VECTOR_STORE_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-06',
+  owaspMcpRef: 'MCP10:2025',
   cweIds: ['CWE-639'],
   executionOrder: 105,
   evaluate: (ir): Finding[] => {
@@ -254,7 +254,7 @@ const MCP_007 = createRule({
     'Tool description includes dynamic content from user input. Could be used for prompt injection to bypass isolation.',
   severity: 'MEDIUM',
   requiredGuards: [],
-  owaspMcpRef: 'OWASP MCP-SEC-07',
+  owaspMcpRef: 'MCP07:2025',
   cweIds: ['CWE-77', 'CWE-94'],
   executionOrder: 106,
   evaluate: (ir): Finding[] => {
@@ -288,7 +288,7 @@ const MCP_008 = createRule({
     'MCP credential vault stores API tokens without tenant-specific scoping. Cross-tenant credential access.',
   severity: 'CRITICAL',
   requiredGuards: [...MCP_CREDENTIAL_VAULT_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-08',
+  owaspMcpRef: 'MCP06:2025',
   cweIds: ['CWE-639', 'CWE-522'],
   executionOrder: 107,
   evaluate: (ir): Finding[] => {
@@ -322,7 +322,7 @@ const MCP_009 = createRule({
     'MCP server uses a single shared API key for all tenant API calls instead of per-tenant credentials.',
   severity: 'HIGH',
   requiredGuards: [...MCP_CREDENTIAL_VAULT_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-09',
+  owaspMcpRef: 'MCP05:2025',
   cweIds: ['CWE-639'],
   executionOrder: 108,
   evaluate: (ir): Finding[] => {
@@ -363,7 +363,7 @@ const MCP_010 = createRule({
     'MCP server does not implement deterministic session cleanup on client disconnect. Stale sessions may retain access.',
   severity: 'MEDIUM',
   requiredGuards: [],
-  owaspMcpRef: 'OWASP MCP-SEC-10',
+  owaspMcpRef: 'MCP10:2025',
   cweIds: ['CWE-613'],
   executionOrder: 109,
   evaluate: (ir): Finding[] => {
@@ -397,7 +397,7 @@ const MCP_011 = createRule({
     'MCP telemetry configuration strips tenantId from telemetry data. Cannot attribute tool usage to tenants.',
   severity: 'LOW',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-11',
+  owaspMcpRef: 'MCP02:2025',
   cweIds: ['CWE-778'],
   executionOrder: 110,
   evaluate: (ir): Finding[] => {
@@ -434,7 +434,7 @@ const MCP_012 = createRule({
     'MCP server binds to 0.0.0.0 or all interfaces instead of 127.0.0.1. Exposes server to network.',
   severity: 'HIGH',
   requiredGuards: [],
-  owaspMcpRef: 'OWASP MCP-SEC-12',
+  owaspMcpRef: 'MCP10:2025',
   cweIds: ['CWE-668'],
   executionOrder: 111,
   evaluate: (ir): Finding[] => {
@@ -475,7 +475,7 @@ const MCP_013 = createRule({
     'MCP tool handler accesses filesystem without a tenant-specific root directory. Path traversal across tenants.',
   severity: 'HIGH',
   requiredGuards: [...MCP_FILESYSTEM_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-13',
+  owaspMcpRef: 'MCP05:2025',
   cweIds: ['CWE-22', 'CWE-639'],
   executionOrder: 112,
   evaluate: (ir): Finding[] => {
@@ -518,7 +518,7 @@ const MCP_014 = createRule({
     'MCP artifact storage (files, images, outputs) does not include tenant prefix. Cross-tenant artifact access.',
   severity: 'HIGH',
   requiredGuards: [...TENANT_ISOLATION_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-14',
+  owaspMcpRef: 'MCP09:2025',
   cweIds: ['CWE-639'],
   executionOrder: 113,
   evaluate: (ir): Finding[] => {
@@ -558,7 +558,7 @@ const MCP_015 = createRule({
     'MCP tools are registered dynamically without tenant-specific namespace. Tool name collisions across tenants.',
   severity: 'MEDIUM',
   requiredGuards: [...TENANT_ISOLATION_GUARDS, ...MCP_TOOL_VISIBILITY_GUARDS],
-  owaspMcpRef: 'OWASP MCP-SEC-15',
+  owaspMcpRef: 'MCP08:2025',
   cweIds: ['CWE-639'],
   executionOrder: 114,
   evaluate: (ir): Finding[] => {

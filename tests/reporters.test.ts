@@ -61,6 +61,25 @@ function makeScanResult(findings: Finding[] = [makeFinding()]): ScanResult {
       rulesTriggered: findings.length > 0 ? 1 : 0,
     },
     durationMs: 42,
+    completeness: 'COMPLETE' as const,
+    completenessReasons: [],
+    coverage: {
+      filesDiscovered: 5,
+      filesParsed: 5,
+      parseFailures: 0,
+      parseFailureDetails: [],
+      excludedPaths: 0,
+      unsupportedPaths: 0,
+      rulesAvailable: 57,
+      rulesSelected: 57,
+      rulesEvaluated: 57,
+      rulesFailed: 0,
+      ruleFailureDetails: [],
+      rulesTriggered: findings.length > 0 ? 1 : 0,
+    },
+    limitations: [
+      'Static analysis only; runtime behavior, dynamic tenant isolation, and database-level enforcement are not verified.',
+    ],
   };
 }
 

@@ -1,5 +1,51 @@
 # Changelog
 
+## [2.0.0] - 2026-08
+
+### Added
+- MCP SDK v2 migration: `@modelcontextprotocol/server` with `registerTool()`, Zod input/output schemas, stdio transport only
+- Structured MCP output (`structuredContent`) with bounded findings (20 default), completeness, coverage, limitations, concern families, and scan receipt
+- Zod `outputSchema` for `scan_tenant_isolation` tool
+- Completeness states: COMPLETE, PARTIAL, ERROR — parser and rule failures now affect completeness
+- Coverage metadata: files discovered/parsed/failed, rules available/selected/evaluated/failed/triggered, excluded and unsupported paths
+- Concern family aggregation: 8 families (Tenant Context, Data Isolation, Cache & Session, MCP Security, Secrets & Credentials, Vector & Storage, API & Access, Audit & Logging)
+- Scan Receipt with rulepack digest, engine version, timestamp, and SHA-256 receipt hash for tamper detection
+- Evidence Envelope with SHA-256 envelope hash for verifiable scan artifacts
+- Fingerprint v2: semantic fingerprints stable under line movement and formatting changes
+- Proof-of-fix states: STILL_PRESENT, RESOLVED_CONFIRMED, NEW, NOT_VERIFIABLE
+- OWASP MCP Top 10 mapping (official 2025 categories MCP01:2025 through MCP10:2025)
+- Path boundary enforcement: project-root containment, traversal prevention, symlink escape detection, UNC path rejection, Windows case-insensitive comparison, 8.3 short-name handling
+- Write-tool gating: MCP server is read-only by default, suppression tool requires `--allow-write-tools` opt-in
+- Custom rulepack validation: rule ID format, built-in collision protection, severity validation, required fields, 50-rule limit
+- Suppression governance: documented approver field, compensating controls required, permanent exception support with justification
+- Cross-platform CI matrix: Ubuntu, Windows, macOS with Node 22.x and 24.x, Node 26.x canary
+- 95 new tests (203 total, up from 108): completeness, fingerprint-v2, path-boundary, session6, golden-corpus
+- Flow analysis qualification documentation
+- Docker and GitHub Action updated to Node 22
+
+### Changed
+- MCP transport: stdio only (legacy SSE removed — no `/sse`, `/message`, `--transport`, `--port`)
+- Node.js requirement: `>=22.0.0` (was `>=18.0.0`)
+- `RULE_ENGINE_VERSION` updated to `2.0.0`
+- `schemaVersion` in structured output updated to `2.0.0`
+- Reporters (terminal, JSON, AI JSON, Markdown) updated to include concern families and receipt digests
+- README completely rewritten with accurate feature documentation
+
+### Fixed
+- IDOR-001 rule: was checking `sink.api` for `id:` substring, but `sink.api` only contains the callee name. Fixed to check `sink.argsVars` for `id` presence.
+- Parser failure detection: Babel `errorRecovery: true` was silently swallowing parse errors. Added `parseError` field to `JsParseResult` and scanner now records parser failures in coverage.
+- CI self-scan step: bash syntax without `shell: bash` declaration would fail on Windows runners. Added explicit `shell: bash`.
+- Dockerfile: updated from `node:20-slim` to `node:22-slim` to match engine requirement.
+- action.yml: updated from Node 20 to Node 22.
+- SECURITY.md: updated dependency listing from `@modelcontextprotocol/sdk` to `@modelcontextprotocol/server`, added `zod`.
+- npm audit: fixed high-severity transitive `nanoid` vulnerability (via vitest → vite → postcss → nanoid).
+
+### Removed
+- Legacy SSE transport (`SSEServerTransport`, `/sse`, `/message` endpoints)
+- `--transport` and `--port` CLI flags for MCP server
+- `@modelcontextprotocol/sdk` dependency (replaced by `@modelcontextprotocol/server`)
+- Invented OWASP references (`OWASP MCP-SEC-01` through `OWASP MCP-SEC-15`) replaced with official `MCP01:2025` through `MCP10:2025`
+
 ## [1.6.2] - 2025-01
 
 ### Added

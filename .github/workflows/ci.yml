@@ -9,14 +9,28 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     if: github.actor != 'dependabot[bot]'
     permissions:
       contents: read
       security-events: write
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [18.x, 20.x]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [22.x, 24.x]
+        exclude:
+          # Reduce matrix size: skip some combinations
+          - os: windows-latest
+            node-version: 24.x
+          - os: macos-latest
+            node-version: 24.x
+        include:
+          # Node 26 canary on Linux only — allow failure, informational only
+          - os: ubuntu-latest
+            node-version: 26.x
+            experimental: true
+    continue-on-error: ${{ matrix.experimental == true }}
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +57,7 @@ jobs:
         run: npm test
 
       - name: Self-scan
+        shell: bash
         run: |
           node dist/cli/index.js scan --format sarif --output mti-results.sarif
           exit_code=$?
@@ -66,7 +81,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           cache: 'npm'
 
       - run: npm ci
@@ -88,7 +103,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 

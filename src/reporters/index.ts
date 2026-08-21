@@ -17,7 +17,13 @@ export function jsonReporter(result: ScanResult): string {
     engineVersion: RULE_ENGINE_VERSION,
     timestamp: result.ir.scanTimestamp,
     durationMs: result.durationMs,
+    completeness: result.completeness,
+    completenessReasons: result.completenessReasons,
     stats: result.stats,
+    coverage: result.coverage,
+    limitations: result.limitations,
+    concernFamilies: result.concernFamilies,
+    receipt: result.receipt,
     findings: sortBySeverity(result.findings),
   }, null, 2);
 }
@@ -168,6 +174,12 @@ export function aiJsonReporter(result: ScanResult): string {
     engineVersion: RULE_ENGINE_VERSION,
     timestamp: result.ir.scanTimestamp,
     durationMs: result.durationMs,
+    completeness: result.completeness,
+    completenessReasons: result.completenessReasons,
+    coverage: result.coverage,
+    limitations: result.limitations,
+    concernFamilies: result.concernFamilies,
+    receipt: result.receipt,
     stats: result.stats,
     summary: {
       totalFindings: result.stats.totalFindings,
@@ -318,6 +330,24 @@ export function terminalReporter(result: ScanResult): string {
   const verdict = getVerdict(result);
   const verdictLabel = verdict === 'PASS' ? 'PASS' : 'FAIL';
   lines.push(`  Verdict: ${verdictLabel}`);
+  // Completeness (Part 9)
+  if (result.completeness !== 'COMPLETE') {
+    lines.push(`  Completeness: ${result.completeness}`);
+    for (const reason of result.completenessReasons) {
+      lines.push(`    - ${reason}`);
+    }
+  }
+  // Coverage summary (Part 10-11)
+  if (result.coverage.parseFailures > 0 || result.coverage.rulesFailed > 0) {
+    lines.push(`  Coverage: ${result.coverage.filesParsed}/${result.coverage.filesDiscovered} files parsed, ${result.coverage.rulesEvaluated}/${result.coverage.rulesSelected} rules evaluated`);
+  }
+  // Concern families (Part 12)
+  if (result.concernFamilies && result.concernFamilies.length > 0) {
+    lines.push('  Concern Families:');
+    for (const cf of result.concernFamilies.slice(0, 5)) {
+      lines.push(`    ${cf.family}: ${cf.activeFindings} active, ${cf.suppressedFindings} suppressed (${cf.ruleIds.length} rules)`);
+    }
+  }
   lines.push('');
 
   if (findings.length === 0) {
@@ -378,6 +408,12 @@ export function markdownReporter(result: ScanResult): string {
   lines.push(`**Date:** ${result.ir.scanTimestamp ?? new Date().toISOString()}`);
   lines.push(`**Duration:** ${durationMs}ms`);
   lines.push(`**Verdict:** ${verdict}`);
+  lines.push(`**Completeness:** ${result.completeness}`);
+  if (result.completenessReasons.length > 0) {
+    for (const reason of result.completenessReasons) {
+      lines.push(`- ${reason}`);
+    }
+  }
   lines.push('');
 
   lines.push('## Summary');
@@ -391,7 +427,23 @@ export function markdownReporter(result: ScanResult): string {
   lines.push(`| Active findings | ${active.length} |`);
   if (suppressed.length > 0) lines.push(`| Suppressed | ${suppressed.length} |`);
   if (baseline.length > 0) lines.push(`| Baseline | ${baseline.length} |`);
+  if (result.receipt) {
+    lines.push(`| Rulepack digest | \`${result.receipt.rulepackDigest.substring(0, 16)}\` |`);
+    lines.push(`| Receipt hash | \`${result.receipt.receiptHash.substring(0, 16)}\` |`);
+  }
   lines.push('');
+
+  // Concern families (Part 12)
+  if (result.concernFamilies && result.concernFamilies.length > 0) {
+    lines.push('### Findings by Concern Family');
+    lines.push('');
+    lines.push('| Concern Family | Active | Suppressed | Rules |');
+    lines.push('|----------------|--------|------------|-------|');
+    for (const cf of result.concernFamilies) {
+      lines.push(`| ${cf.family} | ${cf.activeFindings} | ${cf.suppressedFindings} | ${cf.ruleIds.length} |`);
+    }
+    lines.push('');
+  }
 
   lines.push('### Findings by Severity');
   lines.push('');

@@ -689,7 +689,7 @@ const IDOR_001 = createRule({
   evaluate: (ir) => {
     const findings = [];
     for (const sink of ir.sinks) {
-      if (sink.kind === 'db_read' && sink.api.includes('findUnique') && sink.api.includes('id:')) {
+      if (sink.kind === 'db_read' && sink.api.includes('findUnique') && sink.argsVars.join(' ').includes('id')) {
         if (!isTenantScopedModel(ir, getModelNameFromSink(sink))) continue;
         const hasTenant = hasGuard(sink.api, TENANT_ISOLATION_GUARDS) ||
           hasGuard(sink.argsVars.join(' '), TENANT_ISOLATION_GUARDS) ||

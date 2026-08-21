@@ -10,7 +10,7 @@ export const ALL_RULES: RuleSpec[] = [...GENERAL_RULES, ...MCP_RULES];
 
 export const RULE_COUNT = ALL_RULES.length;
 
-export const RULE_ENGINE_VERSION = '1.6.2';
+export const RULE_ENGINE_VERSION = '2.0.0';
 
 export function getRuleById(id: string): RuleSpec | undefined {
   return ALL_RULES.find((r) => r.id === id);

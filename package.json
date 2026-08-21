@@ -1,6 +1,6 @@
 {
   "name": "mcp-tenant-isolation",
-  "version": "1.6.2",
+  "version": "2.0.0",
   "mcpName": "io.github.subodhkc/mcp-tenant-isolation",
   "description": "Static analysis scanner for MCP server code and multi-tenant SaaS applications. 57 deterministic rules covering tenant isolation, tool visibility, cache key scoping, RLS, IDOR, and credential vault isolation. MCP server for AI agent integration.",
   "main": "dist/index.js",
@@ -57,10 +57,6 @@
     "github-action",
     "taint-analysis",
     "data-flow",
-    "soc2",
-    "iso27001",
-    "hipaa",
-    "gdpr",
     "privacy"
   ],
   "author": "Subodh Kc <subodhkc.com>",
@@ -74,7 +70,7 @@
     "url": "https://github.com/subodhkc/mcp-tenant-isolation/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "files": [
     "dist",
@@ -92,13 +88,14 @@
     "@babel/parser": "^7.24.0",
     "@babel/traverse": "^7.24.0",
     "@babel/types": "^7.24.0",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "commander": "^12.0.0",
-    "fast-glob": "^3.3.2"
+    "fast-glob": "^3.3.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/babel__traverse": "^7.20.5",
-    "@types/node": "^20.11.0",
+    "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.66.0",
     "@typescript-eslint/parser": "^8.66.0",
     "eslint": "^9.39.5",

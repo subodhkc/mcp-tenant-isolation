@@ -239,6 +239,39 @@ export interface FlowPath {
 export type DiffStatus = 'new' | 'existing' | 'regressed' | 'fixed';
 export type SuppressionStatus = 'active' | 'suppressed' | 'baseline';
 
+/**
+ * Proof-of-fix state (Part 16).
+ * - STILL_PRESENT: finding exists in both baseline and current scan
+ * - RESOLVED_CONFIRMED: finding was in baseline but not in current scan (verified gone)
+ * - NEW: finding exists in current scan but not in baseline
+ * - NOT_VERIFIABLE: proof-of-fix cannot be determined (e.g., no baseline, parse failure)
+ */
+export type ProofOfFixState = 'STILL_PRESENT' | 'RESOLVED_CONFIRMED' | 'NEW' | 'NOT_VERIFIABLE';
+
+/**
+ * Concern family (Part 12). Higher-level grouping of rule categories
+ * for triage and reporting. Multiple categories map to one concern family.
+ */
+export type ConcernFamily =
+  | 'Tenant Context'
+  | 'Data Isolation'
+  | 'Cache & Session'
+  | 'MCP Security'
+  | 'Secrets & Credentials'
+  | 'Vector & Storage'
+  | 'API & Access'
+  | 'Audit & Logging';
+
+/** Aggregated finding counts by concern family (Part 12). */
+export interface ConcernFamilySummary {
+  family: ConcernFamily;
+  totalFindings: number;
+  activeFindings: number;
+  suppressedFindings: number;
+  bySeverity: Record<Severity, number>;
+  ruleIds: string[];
+}
+
 export interface Finding {
   ruleId: string;
   title: string;
@@ -249,10 +282,14 @@ export interface Finding {
   missingGuards: string[];
   presentGuards: string[];
   fingerprint: string;
+  /** Fingerprint version: 1 = line-dependent (legacy), 2 = semantic (stable under line movement). */
+  fingerprintVersion?: number;
   diffStatus?: DiffStatus;
   suppressionStatus?: SuppressionStatus;
   suppressionReason?: string;
   suppressionExpires?: string;
+  /** Proof-of-fix state relative to a baseline (Part 16). */
+  proofOfFix?: ProofOfFixState;
 }
 
 
@@ -278,6 +315,129 @@ export interface ScanResult {
   stats: ScanStats;
   durationMs: number;
   error?: string;
+  /** Completeness state (Part 9). COMPLETE = no failures; PARTIAL = some parse/rule failures; ERROR = scan could not run. */
+  completeness: CompletenessState;
+  /** Human-readable reasons for non-COMPLETE completeness. */
+  completenessReasons: string[];
+  /** Coverage and accounting metadata (Part 10-11). */
+  coverage: CoverageInfo;
+  /** Known limitations of this scan run (e.g., unsupported file types, flow analysis gaps). */
+  limitations: string[];
+  /** Concern family aggregation (Part 12). */
+  concernFamilies?: ConcernFamilySummary[];
+  /** Scan receipt for reproducibility and provenance (Parts 17-18). */
+  receipt?: ScanReceipt;
+}
+
+/**
+ * Scan Receipt (Parts 17-18). Provenance and reproducibility metadata
+ * for a scan run. Allows consumers to verify what was scanned, when,
+ * with what engine/rules, and under what configuration.
+ */
+export interface ScanReceipt {
+  /** Receipt schema version. */
+  schemaVersion: string;
+  /** Producer identity (package name). */
+  producerId: string;
+  /** Engine version (RULE_ENGINE_VERSION). */
+  engineVersion: string;
+  /** ISO 8601 timestamp of the scan. */
+  timestamp: string;
+  /** Project root path scanned. */
+  projectRoot: string;
+  /** Scan duration in milliseconds. */
+  durationMs: number;
+  /** Completeness state. */
+  completeness: CompletenessState;
+  /** Verdict (PASS/REVIEW/BLOCK/ERROR). */
+  verdict: 'PASS' | 'REVIEW' | 'BLOCK' | 'ERROR';
+  /** Rulepack digest (hash of rule definitions for reproducibility, Part 22). */
+  rulepackDigest: string;
+  /** Number of rules available. */
+  rulesAvailable: number;
+  /** Number of rules selected (after filters). */
+  rulesSelected: number;
+  /** Number of files discovered. */
+  filesDiscovered: number;
+  /** Number of files parsed. */
+  filesParsed: number;
+  /** Total findings (active + suppressed + baseline). */
+  totalFindings: number;
+  /** Active findings count. */
+  activeFindings: number;
+  /** Suppressed findings count. */
+  suppressedFindings: number;
+  /** SHA-256 hash of the receipt content (excluding this field) for tamper detection. */
+  receiptHash: string;
+}
+
+/**
+ * Evidence Envelope (Parts 19-20). A structured container that bundles
+ * the scan receipt, findings, coverage, and limitations into a single
+ * verifiable artifact. This is the canonical output format for evidence
+ * sharing and future cloud ingestion.
+ */
+export interface EvidenceEnvelope {
+  /** Envelope schema version. */
+  schemaVersion: string;
+  /** Producer identity. */
+  producerId: string;
+  /** ISO 8601 timestamp. */
+  timestamp: string;
+  /** The scan receipt (provenance). */
+  receipt: ScanReceipt;
+  /** Concern family aggregation. */
+  concernFamilies: ConcernFamilySummary[];
+  /** Bounded findings array. */
+  findings: Finding[];
+  /** Truncation metadata. */
+  truncation: {
+    findingsReturned: number;
+    findingsTotal: number;
+    truncated: boolean;
+  };
+  /** Coverage info. */
+  coverage: CoverageInfo;
+  /** Completeness reasons. */
+  completenessReasons: string[];
+  /** Limitations. */
+  limitations: string[];
+  /** SHA-256 hash of the envelope content (excluding this field) for tamper detection. */
+  envelopeHash: string;
+}
+
+/** Completeness state for a scan run. */
+export type CompletenessState = 'COMPLETE' | 'PARTIAL' | 'ERROR';
+
+/** Coverage and accounting metadata for a scan run. */
+export interface CoverageInfo {
+  // File accounting
+  filesDiscovered: number;
+  filesParsed: number;
+  parseFailures: number;
+  parseFailureDetails: ParseFailure[];
+  excludedPaths: number;
+  unsupportedPaths: number;
+
+  // Rule accounting
+  rulesAvailable: number;
+  rulesSelected: number;
+  rulesEvaluated: number;
+  rulesFailed: number;
+  ruleFailureDetails: RuleFailure[];
+  rulesTriggered: number;
+}
+
+/** Details about a single parse failure. */
+export interface ParseFailure {
+  file: string;
+  error: string;
+}
+
+/** Details about a single rule evaluation failure. */
+export interface RuleFailure {
+  ruleId: string;
+  error: string;
 }
 
 export interface ScanStats {
@@ -321,8 +481,23 @@ export interface SuppressionRule {
   filePath?: string;
   reason: string;
   expires?: string;
+  /** @deprecated Use documentedApprover. "approvedBy" implied independent human verification that does not occur. */
   approvedBy?: string;
+  /**
+   * Documented approver identifier. This is a recorded attribution string,
+   * NOT a claim of independent human verification. Renamed from approvedBy
+   * to avoid implying approval that did not occur.
+   */
+  documentedApprover?: string;
   compensatingControls?: string[];
+  /**
+   * If true, the suppression is a documented permanent exception and
+   * `expires` may be omitted. Must include a justification in `reason`
+   * explaining why no expiry applies.
+   */
+  permanentException?: boolean;
+  /** Fingerprint schema version (1 = line-based legacy, 2 = semantic stable). Default 2 for new suppressions. */
+  fingerprintVersion?: 1 | 2;
 }
 
 export interface SuppressionFile {
@@ -332,6 +507,8 @@ export interface SuppressionFile {
 
 export interface BaselineFingerprint {
   fingerprint: string;
+  /** Fingerprint version: 1 = line-dependent (legacy), 2 = semantic (stable). */
+  fingerprintVersion?: number;
   ruleId: string;
   severity: Severity;
   file: string;
