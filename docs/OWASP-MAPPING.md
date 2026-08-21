@@ -30,20 +30,20 @@ This document maps `mcp-tenant-isolation` MCP rules to the official OWASP MCP To
 | Rule ID | Rule Title | OWASP MCP Ref | Rationale |
 |---|---|---|---|
 | MCP-001 | Tool handler has no tenant-based visibility filter | MCP09:2025 | Tools without tenant scoping are shadow-accessible across tenants |
-| MCP-002 | Tool returns data without tenant context verification | MCP07:2025 | Missing authorization on tool responses |
-| MCP-003 | Credential vault accessible across tenant boundaries | MCP01:2025 | Secret exposure across tenant boundaries |
-| MCP-004 | Session binding missing between MCP session and tenant | MCP07:2025 | Insufficient authentication binding |
+| MCP-002 | Tool results cached without tenant prefix | MCP10:2025 | Context over-sharing via shared cache keys |
+| MCP-003 | Session ID used as sole authorization | MCP01:2025 | Token/session mismanagement — session not bound to user+tenant |
+| MCP-004 | Original token forwarded instead of token exchange | MCP07:2025 | Insufficient authorization — token not exchanged per RFC 8693 |
 | MCP-005 | No per-tenant rate limiting on tool calls | MCP02:2025 | Scope creep via resource exhaustion |
-| MCP-006 | Cache key missing tenant prefix | MCP10:2025 | Context injection via shared cache |
-| MCP-007 | Resource handler has no tenant-based access control | MCP07:2025 | Missing authorization on resources |
-| MCP-008 | Prompt injection surface in tool description | MCP06:2025 | Intent flow subversion via tool descriptions |
-| MCP-009 | Tool input not validated against tenant schema | MCP05:2025 | Injection via unvalidated tool input |
-| MCP-010 | Vector store query missing tenant filter | MCP10:2025 | Context over-sharing via vector store |
-| MCP-011 | MCP server exposes admin tools to all tenants | MCP02:2025 | Privilege escalation via scope creep |
-| MCP-012 | Tool output not scoped to requesting tenant | MCP10:2025 | Context over-sharing via tool output |
-| MCP-013 | Filesystem access without tenant root boundary | MCP05:2025 | Command injection via filesystem escape |
-| MCP-014 | Dynamic tool registration without tenant validation | MCP09:2025 | Shadow MCP servers via dynamic registration |
-| MCP-015 | Missing audit log for tenant-scoped tool calls | MCP08:2025 | Lack of audit and telemetry |
+| MCP-006 | Shared vector store without tenant namespaces | MCP10:2025 | Context over-sharing via cross-tenant vector retrieval |
+| MCP-007 | Tool description could bypass isolation | MCP07:2025 | Insufficient authorization — dynamic content in tool descriptions |
+| MCP-008 | Credential vault stores tokens without tenant scoping | MCP06:2025 | Intent flow subversion — wrong tenant receives wrong credentials |
+| MCP-009 | Single shared API key for all tenant API calls | MCP05:2025 | Command injection surface — shared credentials enable cross-tenant access |
+| MCP-010 | No deterministic session cleanup on disconnect | MCP10:2025 | Context over-sharing — stale sessions retain tenant access |
+| MCP-011 | Telemetry strips tenant identifier | MCP02:2025 | Privilege escalation — cannot attribute tool usage to tenants |
+| MCP-012 | MCP server binds to 0.0.0.0 instead of 127.0.0.1 | MCP10:2025 | Context over-sharing — network exposure of local server |
+| MCP-013 | Tool handler accesses filesystem without tenant root | MCP05:2025 | Command injection via filesystem path traversal |
+| MCP-014 | Artifact storage without tenant prefix | MCP09:2025 | Shadow access — cross-tenant artifact access |
+| MCP-015 | Tools registered without tenant namespace | MCP08:2025 | Lack of audit — tool name collisions prevent tenant attribution |
 
 ### General Rules (non-MCP-specific)
 
