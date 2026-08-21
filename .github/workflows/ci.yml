@@ -110,14 +110,15 @@ jobs:
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Install latest npm (trusted publishing requires npm >=11.5.1)
+        run: npm install -g npm@latest
+
       - run: npm ci
 
       - run: npm run build
 
-      - name: Publish with provenance
+      - name: Publish via trusted publishing (OIDC)
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-mcp-registry:
     needs: publish
