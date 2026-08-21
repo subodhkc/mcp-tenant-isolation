@@ -41,6 +41,11 @@ const VALID_SEVERITIES: Severity[] = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL
 /** Built-in rule IDs that custom rules must not collide with. */
 const BUILTIN_RULE_IDS = new Set(ALL_RULES.map((r) => r.id));
 
+/** Normalize a path for case-insensitive containment comparison (cross-platform). */
+function rootNormLower(p: string): string {
+  return resolve(p).toLowerCase();
+}
+
 
 interface CustomRuleDef {
   id: string;
@@ -92,9 +97,11 @@ export async function loadRulePacks(
       // CLI fallback: reject absolute paths that escape root lexically.
       const resolved = resolve(projectRoot, packPath);
       const rootResolved = resolve(projectRoot);
-      const rootNorm = rootResolved.toLowerCase();
-      const resolvedNorm = resolved.toLowerCase();
-      if (resolvedNorm !== rootNorm && !resolvedNorm.startsWith(rootNorm.endsWith('\\') || rootNorm.endsWith('/') ? rootNorm : rootNorm + '\\')) {
+      const rootNorm = rootNormLower(rootResolved);
+      const resolvedNorm = rootNormLower(resolved);
+      const sep = process.platform === 'win32' ? '\\' : '/';
+      const rootWithSep = rootNorm.endsWith(sep) ? rootNorm : rootNorm + sep;
+      if (resolvedNorm !== rootNorm && !resolvedNorm.startsWith(rootWithSep)) {
         console.warn(`Rule pack escapes project root: ${packPath} -> ${resolved}`);
         continue;
       }
