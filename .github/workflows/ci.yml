@@ -57,6 +57,7 @@ jobs:
         run: npm test
 
       - name: Self-scan
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
         shell: bash
         run: |
           set +e
@@ -70,7 +71,7 @@ jobs:
           echo "Self-scan completed with exit code $exit_code (0=no findings, 1=findings found)"
 
       - name: Upload SARIF
-        if: always()
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: mti-results.sarif
