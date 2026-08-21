@@ -53,7 +53,9 @@ mti scan ./src --format sarif --output results.sarif
 mti scan ./src --format markdown --output TENANT-ISOLATION-REPORT.md
 mti scan ./src --format ai --output findings.json
 mti scan ./src --severity HIGH
-mti init
+mti rules                          # list all 57 rules
+mti baseline                       # snapshot current findings for proof-of-fix tracking
+mti init                           # create .mtirc.json with defaults
 ```
 
 ## Demo
@@ -138,7 +140,7 @@ The package includes an MCP server for AI agent integration. It runs locally via
 }
 ```
 
-Add this to your Claude Desktop, Cursor, or other MCP client config to let your AI agent scan code for tenant isolation issues on demand.
+Add this to your Claude Desktop, Cursor, Windsurf, or other MCP client config to let your AI agent scan code for tenant isolation issues on demand.
 
 ### MCP tools
 
@@ -321,6 +323,27 @@ mti scan ./src --format markdown --output TENANT-ISOLATION-REPORT.md
 mti scan ./src --format sarif --output results.sarif
 ```
 
+## Trust and supply chain
+
+- **npm Trusted Publishing** — packages are published via GitHub Actions OIDC, not long-lived tokens. Each publish uses a short-lived, workflow-specific credential.
+- **Provenance attestations** — every published package includes a signed provenance statement in the Sigstore transparency log. You can verify that the package was built from the exact source in this repository.
+- **0 npm audit vulnerabilities** — dependencies are audited on every CI run. The lockfile is committed and CI uses `npm ci` for reproducible installs.
+- **Deterministic rules** — no machine learning, no probabilistic scoring. Given the same source code, the scanner produces the same findings every time.
+- **Cross-platform CI** — tested on Ubuntu, Windows, and macOS with Node 22 and 24. Node 26 canary runs as informational.
+- **MIT licensed** — free and open source. No telemetry, no phone-home, no data collection.
+
+## Limitations
+
+Static analysis has inherent limits. Being upfront about them:
+
+- **Intra-procedural flow analysis only.** The scanner traces data flow within a single function body. It does not trace flow across function calls, files, or framework middleware boundaries. Most tenant isolation defects are missing-guard-at-sink problems that do not require inter-procedural analysis, but some edge cases may be missed.
+- **No runtime verification.** The scanner checks source code patterns. It cannot verify that database-level RLS policies are actually enabled, that middleware actually runs, or that tenant context is actually propagated at runtime.
+- **TypeScript and JavaScript only.** Python, Go, Ruby, and other languages are not supported yet.
+- **False positives are possible.** The scanner uses pattern-based detection with false-positive filtering (test file exclusion, auth signal detection, confidence scoring). Custom auth helpers and tenant guards can be configured via `.mtirc.json` to reduce false positives.
+- **MCP stdio transport only.** The MCP server runs locally via stdio. Remote/HTTP transport is not supported in v2.0.
+
+See [docs/FLOW-ANALYSIS-QUALIFICATION.md](docs/FLOW-ANALYSIS-QUALIFICATION.md) for detailed flow analysis scope.
+
 ## Tech stack
 
 - AST Parsing: @babel/parser (TypeScript, JSX), Prisma schema parser, SQL migration parser
@@ -328,7 +351,7 @@ mti scan ./src --format sarif --output results.sarif
 - CLI: Commander
 - MCP: @modelcontextprotocol/server v2 (stdio transport, Zod schemas, structured output)
 - Output: Terminal, JSON, SARIF 2.1.0, AI JSON, Markdown
-- Testing: Vitest (192 tests, cross-platform CI on Ubuntu, Windows, macOS)
+- Testing: Vitest (203 tests, cross-platform CI on Ubuntu, Windows, macOS)
 
 ## Roadmap
 
@@ -370,6 +393,9 @@ mti scan ./src --format sarif --output results.sarif
 - [GitHub](https://github.com/subodhkc/mcp-tenant-isolation)
 - [npm](https://www.npmjs.com/package/mcp-tenant-isolation)
 - [Docker Hub](https://hub.docker.com/r/subodhkc/mcp-tenant-isolation)
+- [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 - [HAIEC](https://www.haiec.com) — AI security validation and audit-evidence platform
 - [Subodh Kc](https://subodhkc.com) — builder
 

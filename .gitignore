@@ -12,3 +12,5 @@ haiec-scan-results*.json
 check-auth.js
 compare.js
 report-data.js
+docs/evidence/
+commit-msg*.txt
