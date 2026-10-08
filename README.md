@@ -396,7 +396,7 @@ See [docs/FLOW-ANALYSIS-QUALIFICATION.md](docs/FLOW-ANALYSIS-QUALIFICATION.md) f
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
-- [HAIEC](https://www.haiec.com) — AI security validation and audit-evidence platform
+- [HAIEC](https://www.haiec.com) (Human AI Evidence Company) — AI security validation and audit-evidence platform
 - [Subodh Kc](https://subodhkc.com) — builder
 
 ## License
